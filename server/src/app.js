@@ -25,6 +25,10 @@ app.use(cors());
 app.use(express.json());
 app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
 
+app.get("/", (req, res) => {
+    res.send("Welcome to EduReach Backend - Server is Live!");
+});
+
 app.use("/api/auth", authRoutes);
 app.use("/api/courses", courseRoutes);
 app.use("/api/modules", moduleRoutes);
