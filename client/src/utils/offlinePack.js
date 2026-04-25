@@ -46,16 +46,30 @@ export const downloadCoursePack = async (courseId) => {
 
   const lectureEntries = await Promise.all(
     modulesResponse.data.map(async (moduleItem) => {
-      const lectureResponse = await API.get(`/lectures/${moduleItem._id}`);
-      return [moduleItem._id, lectureResponse.data];
+      const [lectureResponse, quizResponse] = await Promise.all([
+        API.get(`/lectures/${moduleItem._id}`),
+        API.get(`/quizzes/module/${moduleItem._id}`),
+      ]);
+      return {
+        moduleId: moduleItem._id,
+        lectures: lectureResponse.data,
+        quizzes: quizResponse.data,
+      };
     })
   );
 
-  const lecturesByModule = Object.fromEntries(lectureEntries);
+  const lecturesByModule = {};
+  const quizzesByModule = {};
+  lectureEntries.forEach((entry) => {
+    lecturesByModule[entry.moduleId] = entry.lectures;
+    quizzesByModule[entry.moduleId] = entry.quizzes;
+  });
+
   const pack = {
     course: courseResponse.data,
     modules: modulesResponse.data,
     lecturesByModule,
+    quizzesByModule,
     downloadedAt: new Date().toISOString(),
   };
 
@@ -155,6 +169,7 @@ export const findOfflineLecture = async (lectureId) => {
           module,
           course: pack.course,
           lectures,
+          quizzes: pack.quizzesByModule?.[module._id] || [],
         };
       }
     }

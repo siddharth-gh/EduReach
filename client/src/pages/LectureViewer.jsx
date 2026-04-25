@@ -322,7 +322,7 @@ const LectureViewer = () => {
           setCourseOutline(offlineData.course);
           setOutlineModules([offlineData.module]);
           setOutlineLectures({ [offlineData.module._id]: offlineData.lectures });
-          setOutlineQuizzes({ [offlineData.module._id]: [] });
+          setOutlineQuizzes({ [offlineData.module._id]: offlineData.quizzes || [] });
           setOpenOutlineModule(offlineData.module._id);
           setOutlineLoading(false);
           return;
@@ -375,7 +375,21 @@ const LectureViewer = () => {
       setAdaptiveSessionId(res.data.sessionId);
       setAdaptiveSession(res.data.session);
       setAdaptiveQuestion(res.data.currentQuestion);
-    } catch {}
+    } catch {
+      // Offline fallback: Use the pre-cached AI question bank
+      if (lecture?.aiQuestionBank?.questions?.length > 0) {
+        const q = lecture.aiQuestionBank.questions[0];
+        setAdaptiveSessionId("offline-session");
+        setAdaptiveQuestion({
+          id: q._id || "offline-q0",
+          question: q.questionText,
+          options: [q.optionA, q.optionB, q.optionC, q.optionD],
+          questionNumber: 1,
+          totalQuestions: lecture.aiQuestionBank.questions.length,
+          difficulty: "Standard"
+        });
+      }
+    }
   };
 
   const handleSubmitAdaptiveAnswer = async () => {
@@ -391,7 +405,35 @@ const LectureViewer = () => {
       setAdaptiveSession(res.data.session);
       setAdaptiveQuestion(res.data.currentQuestion);
       setSelectedAdaptiveAnswer(null);
-    } catch {} finally { setIsSubmittingAdaptive(false); }
+    } catch {
+      if (adaptiveSessionId === "offline-session") {
+        const currentIdx = adaptiveQuestion.questionNumber - 1;
+        const qData = lecture.aiQuestionBank.questions[currentIdx];
+        const isCorrect = selectedAdaptiveAnswer === qData.correctAnswer;
+        
+        setAdaptiveFeedback({
+          isCorrect,
+          explanation: qData.explanation
+        });
+
+        // Advance to next question after delay if available
+        if (currentIdx + 1 < lecture.aiQuestionBank.questions.length) {
+          const nextQ = lecture.aiQuestionBank.questions[currentIdx + 1];
+          setTimeout(() => {
+            setAdaptiveQuestion({
+              id: nextQ._id || `offline-q${currentIdx + 1}`,
+              question: nextQ.questionText,
+              options: [nextQ.optionA, nextQ.optionB, nextQ.optionC, nextQ.optionD],
+              questionNumber: currentIdx + 2,
+              totalQuestions: lecture.aiQuestionBank.questions.length,
+              difficulty: "Standard"
+            });
+            setAdaptiveFeedback(null);
+            setSelectedAdaptiveAnswer(null);
+          }, 3000);
+        }
+      }
+    } finally { setIsSubmittingAdaptive(false); }
   };
 
   if (!lecture) return <AppShell><div className="max-w-7xl mx-auto px-4 py-20 animate-pulse"><div className="h-96 bg-gray-200 dark:bg-gray-800 rounded-[48px]"></div></div></AppShell>;
