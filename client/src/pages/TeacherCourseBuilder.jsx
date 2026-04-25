@@ -398,7 +398,7 @@ const TeacherCourseBuilder = () => {
                                <div className="space-y-2">
                                   <label className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em]">Order Index</label>
                                   <input 
-                                    type="number" 
+                                    typyupe="number" 
                                     className="w-full bg-[#0B0F19] border border-gray-800 rounded-xl px-5 py-4 text-sm text-white focus:outline-none focus:border-blue-500 transition-all"
                                     value={lectureForms[m._id]?.order || 1}
                                     onChange={e => updateLectureForm(m._id, 'order', e.target.value)}

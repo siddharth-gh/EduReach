@@ -10,7 +10,7 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js")
       .then((registration) => {
         // Pre-fetch critical data for landing page to ensure it's cached immediately
-        const apiUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_APP_URL || "http://localhost:5000/api";
+        const apiUrl = "http://34.204.170.9:5000/api";
         const normalizedApiUrl = apiUrl.endsWith("/") ? apiUrl.slice(0, -1) : apiUrl;
         
         // Use the service worker's cache by simply fetching the data
