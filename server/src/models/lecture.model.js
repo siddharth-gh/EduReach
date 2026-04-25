@@ -60,16 +60,6 @@ const contentSchema = new mongoose.Schema(
             default: 0,
         },
 
-        originalSize: {
-            type: Number,
-            default: 0,
-        },
-
-        optimizedSize: {
-            type: Number,
-            default: 0,
-        },
-
         audioOnlySize: {
             type: Number,
             default: 0,

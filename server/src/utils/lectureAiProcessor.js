@@ -40,7 +40,13 @@ const markLectureFailed = async (lectureId, errorMessage) => {
 };
 
 export const queueLectureAiProcessing = async (lectureId) => {
-    if (!isAiConfigured() || activeLectureJobs.has(String(lectureId))) {
+    console.log(`[AI Processor] Queuing lecture: ${lectureId}`);
+    if (!isAiConfigured()) {
+        console.warn(`[AI Processor] AI not configured. Skipping lecture: ${lectureId}`);
+        return;
+    }
+    if (activeLectureJobs.has(String(lectureId))) {
+        console.log(`[AI Processor] Lecture ${lectureId} is already being processed. Skipping duplicate job.`);
         return;
     }
 
@@ -91,6 +97,7 @@ export const queueLectureAiProcessing = async (lectureId) => {
             return;
         }
 
+        console.log(`[AI Processor] Starting summary generation for lecture: ${lecture.title}`);
         const { summary, keyPoints } = await generateLectureSummary({
             courseTitle: course?.title || "Untitled course",
             moduleTitle: module?.title || "Untitled module",
@@ -98,6 +105,8 @@ export const queueLectureAiProcessing = async (lectureId) => {
             lectureText: lectureCourseText,
             transcriptText,
         });
+
+        console.log(`[AI Processor] Summary generated. Now starting adaptive quiz bank generation...`);
 
         await Lecture.findByIdAndUpdate(lectureId, {
             $set: {
@@ -111,6 +120,7 @@ export const queueLectureAiProcessing = async (lectureId) => {
             },
         });
 
+        console.log(`[AI Processor] Generating Easy questions...`);
         const easyQ = await generateAdaptiveQuestionBank({
             courseTitle: course?.title || "Untitled course",
             moduleTitle: module?.title || "Untitled module",
@@ -121,6 +131,7 @@ export const queueLectureAiProcessing = async (lectureId) => {
             count: 5,
         });
 
+        console.log(`[AI Processor] Generating Medium questions...`);
         const mediumQ = await generateAdaptiveQuestionBank({
             courseTitle: course?.title || "Untitled course",
             moduleTitle: module?.title || "Untitled module",
@@ -131,6 +142,7 @@ export const queueLectureAiProcessing = async (lectureId) => {
             count: 5,
         });
 
+        console.log(`[AI Processor] Generating Hard questions...`);
         const hardQ = await generateAdaptiveQuestionBank({
             courseTitle: course?.title || "Untitled course",
             moduleTitle: module?.title || "Untitled module",

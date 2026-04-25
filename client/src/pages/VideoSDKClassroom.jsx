@@ -69,26 +69,37 @@ const ChatView = () => {
   };
 
   return (
-    <div className="w-full md:w-[300px] h-[300px] md:h-full bg-[#1a1a1a] border-t md:border-t-0 md:border-l border-[#333] flex flex-col">
-      <div style={{ padding: "16px", borderBottom: "1px solid #333", fontWeight: "bold", color: "#fff" }}>Class Chat</div>
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "8px" }}>
+    <div className="w-full md:w-[350px] h-[400px] md:h-full bg-white dark:bg-[#0f172a] rounded-[32px] md:rounded-none border border-gray-100 dark:border-gray-800 shadow-xl md:shadow-none flex flex-col overflow-hidden transition-all">
+      <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+        <span className="text-sm font-black uppercase tracking-widest text-gray-900 dark:text-white">Live Chat</span>
+        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+      </div>
+      <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
         {messages.map((msg) => (
-          <div key={msg.id} style={{ background: "#333", padding: "8px 12px", borderRadius: "8px", fontSize: "14px", color: "#fff" }}>
-            <span style={{ fontWeight: "bold", color: "#88aaff", display: "block", marginBottom: "4px", fontSize: "12px" }}>{msg.senderName}</span>
-            {msg.message}
+          <div key={msg.id} className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-2xl border border-gray-100/50 dark:border-gray-700/30">
+            <span className="font-black text-[10px] text-blue-600 dark:text-blue-400 uppercase tracking-widest block mb-1">{msg.senderName}</span>
+            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{msg.message}</p>
           </div>
         ))}
+        {messages.length === 0 && (
+          <div className="h-full flex flex-col items-center justify-center opacity-30 text-center px-6">
+            <span className="text-3xl mb-2">💬</span>
+            <p className="text-xs font-bold uppercase tracking-widest">No messages yet. Say hello!</p>
+          </div>
+        )}
       </div>
-      <div style={{ padding: "16px", borderTop: "1px solid #333", display: "flex", gap: "8px" }}>
+      <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/20 flex gap-2">
         <input
           type="text"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
           placeholder="Type a message..."
-          className="flex-1 p-2 rounded bg-[#222] text-white border border-[#444] text-sm outline-none"
+          className="flex-1 px-4 py-3 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 transition-all"
         />
-        <button className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-2 rounded transition-all" onClick={handleSendMessage}>Send</button>
+        <button className="w-12 h-12 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-600/20 active:scale-95 transition-all" onClick={handleSendMessage}>
+          →
+        </button>
       </div>
     </div>
   );
@@ -117,7 +128,7 @@ const MeetingView = ({ onMeetingLeave, isTeacherHost }) => {
   const participantsArr = [...participants.values()];
 
   return (
-    <div className="live-studio-container flex flex-col md:flex-row bg-[#0a0a0a]">
+    <div className="flex flex-col md:flex-row gap-8 min-h-[600px] bg-transparent">
       {joined === "JOINED" ? (
         <>
           <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
@@ -135,9 +146,9 @@ const MeetingView = ({ onMeetingLeave, isTeacherHost }) => {
             </div>
 
             {/* Video Grid */}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", padding: "24px", height: "100%", paddingBottom: "100px", overflowY: "auto", alignContent: "flex-start" }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 p-6 h-full pb-32 overflow-y-auto custom-scrollbar">
               {participantsArr.map((participant) => (
-                <div key={participant.id} style={{ flex: "1 1 45%", minWidth: "300px", height: "300px" }}>
+                <div key={participant.id} className="aspect-video rounded-3xl overflow-hidden shadow-2xl border border-gray-100 dark:border-gray-800 bg-black">
                   <ParticipantView participantId={participant.id} />
                 </div>
               ))}

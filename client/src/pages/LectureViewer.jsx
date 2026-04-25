@@ -403,7 +403,9 @@ const LectureViewer = () => {
       });
       setAdaptiveFeedback(res.data.feedback);
       setAdaptiveSession(res.data.session);
-      setAdaptiveQuestion(res.data.currentQuestion);
+      if (res.data.currentQuestion) {
+        setAdaptiveQuestion(res.data.currentQuestion);
+      }
       setSelectedAdaptiveAnswer(null);
     } catch {
       if (adaptiveSessionId === "offline-session") {
@@ -434,6 +436,13 @@ const LectureViewer = () => {
         }
       }
     } finally { setIsSubmittingAdaptive(false); }
+  };
+
+  const handleRestartAdaptive = () => {
+    setAdaptiveSession(null);
+    setAdaptiveQuestion(null);
+    setAdaptiveFeedback(null);
+    setSelectedAdaptiveAnswer(null);
   };
 
   if (!lecture) return <AppShell><div className="max-w-7xl mx-auto px-4 py-20 animate-pulse"><div className="h-96 bg-gray-200 dark:bg-gray-800 rounded-[48px]"></div></div></AppShell>;
@@ -535,47 +544,178 @@ const LectureViewer = () => {
                     <p className="text-sm text-gray-500 mt-2">Personalized questions based on your current understanding.</p>
                  </div>
 
-                 {!adaptiveQuestion ? (
+                 {!adaptiveQuestion && (!adaptiveSession || adaptiveSession.status !== "completed") ? (
                    <div className="text-center">
-                      <button onClick={handleStartAdaptivePractice} className="px-10 py-5 bg-blue-600 text-white font-black rounded-2xl shadow-xl shadow-blue-600/20 transition-all transform hover:-translate-y-1">
-                        Start Practice Session
-                      </button>
+                      <div className="mb-8 p-10 bg-orange-50 dark:bg-orange-900/10 rounded-[32px] border border-orange-100 dark:border-orange-900/20 inline-block max-w-md">
+                        <p className="text-gray-600 dark:text-gray-400 font-medium mb-6">Start a personalized session that adapts to your performance. We'll identify your gaps and help you master the material.</p>
+                        <button onClick={handleStartAdaptivePractice} className="px-10 py-5 bg-blue-600 text-white font-black rounded-2xl shadow-xl shadow-blue-600/20 transition-all transform hover:-translate-y-1">
+                          Start Practice Session
+                        </button>
+                      </div>
                    </div>
-                 ) : (
+                 ) : adaptiveSession?.status === "completed" && !adaptiveFeedback ? (
+                   <div className="animate-in fade-in zoom-in duration-500">
+                      <div className="text-center mb-12">
+                         <div className="inline-flex items-center justify-center w-32 h-32 rounded-full bg-blue-600 text-white text-4xl font-black mb-6 shadow-2xl shadow-blue-600/40 border-8 border-blue-50 dark:border-blue-900/20">
+                            {adaptiveSession.score}
+                         </div>
+                         <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2">Practice Complete!</h3>
+                         <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-2">Mastery Rating: {adaptiveSession.score} / 10</p>
+                         <p className="text-gray-500 font-medium text-xs">You answered {adaptiveSession.correctCount} out of {adaptiveSession.answeredCount} questions correctly.</p>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+                         {/* Strong Concepts */}
+                         <div className="p-8 bg-green-50/50 dark:bg-green-900/10 rounded-[32px] border border-green-100 dark:border-green-900/20">
+                            <h4 className="text-sm font-black text-green-700 dark:text-green-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                               <span className="text-lg">🎯</span> Strong Topics
+                            </h4>
+                            <div className="space-y-4">
+                               {adaptiveSession.strongConcepts?.length > 0 ? (
+                                 adaptiveSession.strongConcepts.map((item, i) => (
+                                   <div key={i} className="flex justify-between items-center">
+                                      <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{item.concept}</span>
+                                      <span className="text-xs font-black text-green-600">{item.mastery}%</span>
+                                   </div>
+                                 ))
+                               ) : (
+                                 <p className="text-xs text-gray-400 italic">No strong topics identified yet. Keep practicing!</p>
+                               )}
+                            </div>
+                         </div>
+
+                         {/* Weak Concepts */}
+                         <div className="p-8 bg-red-50/50 dark:bg-red-900/10 rounded-[32px] border border-red-100 dark:border-red-900/20">
+                            <h4 className="text-sm font-black text-red-700 dark:text-red-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                               <span className="text-lg">⚡</span> Areas to Improve
+                            </h4>
+                            <div className="space-y-4">
+                               {adaptiveSession.weakConcepts?.length > 0 ? (
+                                 adaptiveSession.weakConcepts.map((item, i) => (
+                                   <div key={i} className="flex justify-between items-center">
+                                      <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{item.concept}</span>
+                                      <span className="text-xs font-black text-red-600">{item.mastery}%</span>
+                                   </div>
+                                 ))
+                               ) : (
+                                 <p className="text-xs text-green-600 font-bold italic">Excellent! No major weaknesses found.</p>
+                               )}
+                            </div>
+                         </div>
+                      </div>
+
+                      {/* Suggestions */}
+                      {adaptiveSession.weakConcepts?.length > 0 && (
+                        <div className="mb-12 p-8 bg-blue-50/30 dark:bg-blue-900/5 rounded-[32px] border border-blue-100/50 dark:border-blue-900/10">
+                           <h4 className="text-sm font-black text-blue-600 uppercase tracking-widest mb-6">Learning Path Suggestions</h4>
+                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              {adaptiveSession.weakConcepts.map((item, i) => (
+                                <div key={i} className="flex gap-4 items-start p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm">
+                                   <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 shrink-0">📖</div>
+                                   <div>
+                                      <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Review</p>
+                                      <p className="text-sm font-bold text-gray-900 dark:text-white">Re-read sections covering "{item.concept}"</p>
+                                   </div>
+                                </div>
+                              ))}
+                              <div className="flex gap-4 items-start p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm">
+                                 <div className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 shrink-0">✨</div>
+                                 <div>
+                                    <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Next Step</p>
+                                    <p className="text-sm font-bold text-gray-900 dark:text-white">Ask AI Assistant about your weak topics</p>
+                                 </div>
+                              </div>
+                           </div>
+                        </div>
+                      )}
+
+                      <div className="flex justify-center gap-4">
+                         <button onClick={handleRestartAdaptive} className="px-8 py-4 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-black rounded-2xl transition-all hover:bg-gray-200 dark:hover:bg-gray-700">
+                            Restart Practice
+                         </button>
+                         <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="px-8 py-4 bg-blue-600 text-white font-black rounded-2xl shadow-xl shadow-blue-600/20 transition-all transform hover:-translate-y-1">
+                            Back to Lecture
+                         </button>
+                      </div>
+                   </div>
+                 ) : adaptiveQuestion || adaptiveFeedback ? (
                    <div className="max-w-2xl mx-auto">
                       <div className="flex justify-between items-center mb-8">
-                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Question {adaptiveQuestion.questionNumber} of {adaptiveQuestion.totalQuestions}</span>
+                         <div className="flex flex-col">
+                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Progress</span>
+                            <div className="flex items-center gap-3">
+                               <div className="w-32 h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                                  <div 
+                                    className="h-full bg-blue-600 transition-all duration-500" 
+                                    style={{ width: `${(adaptiveQuestion.questionNumber / adaptiveQuestion.totalQuestions) * 100}%` }}
+                                  />
+                               </div>
+                               <span className="text-[10px] font-black text-gray-500">{adaptiveQuestion.questionNumber} / {adaptiveQuestion.totalQuestions}</span>
+                            </div>
+                         </div>
                          <span className="px-3 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 text-[10px] font-black rounded-full uppercase tracking-widest">Difficulty: {adaptiveQuestion.difficulty}</span>
                       </div>
-                      <h4 className="text-xl font-bold text-gray-900 dark:text-white mb-8">{adaptiveQuestion.question}</h4>
+                      
+                      <h4 className="text-xl font-bold text-gray-900 dark:text-white mb-8">
+                        {adaptiveQuestion?.question}
+                      </h4>
+                      
                       <div className="grid grid-cols-1 gap-4 mb-8">
-                         {adaptiveQuestion.options.map((opt, i) => (
+                         {(adaptiveQuestion?.options || []).map((opt, i) => (
                            <button 
                             key={i} 
-                            onClick={() => setSelectedAdaptiveAnswer(i)}
-                            className={`p-6 text-left rounded-3xl border-2 transition-all font-bold ${selectedAdaptiveAnswer === i ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-600' : 'border-gray-100 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700 text-gray-700 dark:text-gray-300'}`}
+                            onClick={() => !adaptiveFeedback && setSelectedAdaptiveAnswer(i)}
+                            disabled={!!adaptiveFeedback}
+                            className={`p-6 text-left rounded-3xl border-2 transition-all font-bold relative group ${
+                              adaptiveFeedback 
+                                ? (i === adaptiveFeedback.correctAnswer ? 'border-green-500 bg-green-50 dark:bg-green-900/10 text-green-700 dark:text-green-400' : (selectedAdaptiveAnswer === i ? 'border-red-500 bg-red-50 dark:bg-red-900/10 text-red-700 dark:text-red-400' : 'border-gray-100 dark:border-gray-800 opacity-50'))
+                                : (selectedAdaptiveAnswer === i ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-600' : 'border-gray-100 dark:border-gray-800 hover:border-blue-300 text-gray-700 dark:text-gray-300')
+                            }`}
                            >
-                             <span className="mr-4 text-blue-500">{String.fromCharCode(65 + i)}</span> {opt}
+                             <div className="flex items-center">
+                                <span className={`w-8 h-8 rounded-xl flex items-center justify-center mr-4 text-xs font-black transition-colors ${selectedAdaptiveAnswer === i ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}`}>
+                                   {String.fromCharCode(65 + i)}
+                                </span>
+                                <span className="flex-1">{opt}</span>
+                                {adaptiveFeedback && i === adaptiveFeedback.correctAnswer && <span className="text-green-600 ml-2">✓</span>}
+                                {adaptiveFeedback && i === selectedAdaptiveAnswer && i !== adaptiveFeedback.correctAnswer && <span className="text-red-600 ml-2">✕</span>}
+                             </div>
                            </button>
                          ))}
                       </div>
-                      <button 
-                        onClick={handleSubmitAdaptiveAnswer} 
-                        disabled={isSubmittingAdaptive}
-                        className="w-full py-5 bg-blue-600 text-white font-black rounded-2xl shadow-xl shadow-blue-600/20 disabled:bg-blue-400"
-                      >
-                        {isSubmittingAdaptive ? "Checking..." : "Submit Answer"}
-                      </button>
-                   </div>
-                 )}
 
-                 {adaptiveFeedback && (
-                   <div className={`mt-10 p-8 rounded-[32px] border ${adaptiveFeedback.isCorrect ? 'bg-green-50 dark:bg-green-900/10 border-green-100 dark:border-green-900/20 text-green-700 dark:text-green-400' : 'bg-red-50 dark:bg-red-900/10 border-red-100 dark:border-red-900/20 text-red-700 dark:text-red-400'}`}>
-                      <p className="font-black uppercase text-xs tracking-widest mb-2">{adaptiveFeedback.isCorrect ? "Correct!" : "Keep Trying"}</p>
-                      <p className="text-lg font-bold mb-4">{adaptiveFeedback.explanation}</p>
-                      {adaptiveFeedback.remediationHint && <p className="text-sm italic opacity-80">Hint: {adaptiveFeedback.remediationHint}</p>}
+                      {!adaptiveFeedback ? (
+                        <button 
+                          onClick={handleSubmitAdaptiveAnswer} 
+                          disabled={isSubmittingAdaptive || selectedAdaptiveAnswer === null}
+                          className="w-full py-5 bg-blue-600 text-white font-black rounded-2xl shadow-xl shadow-blue-600/20 disabled:bg-gray-200 disabled:shadow-none disabled:text-gray-400 transition-all transform hover:-translate-y-1 active:scale-95"
+                        >
+                          {isSubmittingAdaptive ? "Analyzing Answer..." : "Submit Answer"}
+                        </button>
+                      ) : (
+                        <div className="animate-in slide-in-from-bottom duration-300">
+                           <div className={`p-8 rounded-[32px] border mb-8 ${adaptiveFeedback.isCorrect ? 'bg-green-50 dark:bg-green-900/10 border-green-100 dark:border-green-900/20 text-green-700 dark:text-green-400' : 'bg-red-50 dark:bg-red-900/10 border-red-100 dark:border-red-900/20 text-red-700 dark:text-red-400'}`}>
+                              <p className="font-black uppercase text-xs tracking-widest mb-2 flex items-center gap-2">
+                                 {adaptiveFeedback.isCorrect ? "✨ Brilliantly Done!" : "💡 Learning Opportunity"}
+                              </p>
+                              <p className="text-lg font-bold mb-4">{adaptiveFeedback.explanation}</p>
+                              {adaptiveFeedback.remediationHint && (
+                                <p className="text-sm italic opacity-80 mt-4 pt-4 border-t border-black/5 dark:border-white/5">
+                                   <span className="font-bold">Pro Tip:</span> {adaptiveFeedback.remediationHint}
+                                </p>
+                              )}
+                           </div>
+                           
+                           <button 
+                             onClick={() => setAdaptiveFeedback(null)}
+                             className="w-full py-5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-black rounded-2xl shadow-xl transition-all"
+                           >
+                             Continue to Next Question
+                           </button>
+                        </div>
+                      )}
                    </div>
-                 )}
+                 ) : null}
               </section>
             )}
 
@@ -647,22 +787,35 @@ const LectureViewer = () => {
                           {isOpen && (
                             <div className="mt-2 space-y-1 pl-2 border-l-2 border-blue-100 dark:border-blue-900/30 ml-4">
                                {outlineLectures[m._id]?.map((l) => (
-                                 <button 
-                                  key={l._id} 
-                                  onClick={() => navigate(`/lecture/${l._id}`, { state: { lectures: outlineLectures[m._id] } })}
-                                  className={`w-full text-left p-3 rounded-xl text-xs font-medium transition-colors ${l._id === lectureId ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'}`}
-                                 >
-                                   {l.title}
-                                 </button>
+                                 <div key={l._id} className="space-y-1">
+                                   <button 
+                                    onClick={() => navigate(`/lecture/${l._id}`, { state: { lectures: outlineLectures[m._id] } })}
+                                    className={`w-full text-left p-3 rounded-xl text-xs font-medium transition-colors ${l._id === lectureId ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'}`}
+                                   >
+                                     <span className="flex items-center gap-2">📽️ {l.title}</span>
+                                   </button>
+                                   
+                                   {/* Linked Quizzes */}
+                                   {outlineQuizzes[m._id]?.filter(q => q.sourceLectureId === l._id).map(q => (
+                                     <button 
+                                      key={q._id} 
+                                      onClick={() => navigate(`/quiz/${q._id}`)}
+                                      className="w-[calc(100%-1.5rem)] ml-6 text-left p-2 rounded-lg text-[10px] font-bold text-orange-600 bg-orange-50/50 dark:bg-orange-900/10 hover:bg-orange-100 transition-colors border border-orange-100/50 dark:border-orange-900/10"
+                                     >
+                                       <span className="flex items-center gap-2">📝 {q.title}</span>
+                                     </button>
+                                   ))}
+                                 </div>
                                ))}
-                               {outlineQuizzes[m._id]?.map((q) => (
+
+                               {/* Floating Quizzes (Not linked to any lecture) */}
+                               {outlineQuizzes[m._id]?.filter(q => !q.sourceLectureId).map((q) => (
                                  <button 
                                   key={q._id} 
                                   onClick={() => navigate(`/quiz/${q._id}`)}
-                                  className="w-full text-left p-3 rounded-xl text-xs font-black uppercase tracking-widest text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all flex justify-between items-center"
+                                  className="w-full text-left p-3 rounded-xl text-xs font-bold text-purple-600 bg-purple-50/50 dark:bg-purple-900/10 hover:bg-purple-100 transition-colors border border-purple-100/50 dark:border-purple-900/10 mt-2"
                                  >
-                                   <span className="truncate pr-2">{q.title}</span>
-                                   <span className="text-[8px] bg-blue-600 text-white px-1.5 py-0.5 rounded-full">Quiz</span>
+                                   <span className="flex items-center gap-2">🧠 {q.title}</span>
                                  </button>
                                ))}
                             </div>

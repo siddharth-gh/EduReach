@@ -2,7 +2,7 @@ import { Link, NavLink } from "react-router-dom";
 import { useAuth } from "../app/useAuth";
 import { useTranslation } from "react-i18next";
 
-const Navbar = ({ theme, onToggleTheme }) => {
+const Navbar = ({ theme, onToggleTheme, onToggleSidebar }) => {
   const { user, isAuthenticated, logout, getHomeRouteForRole } = useAuth();
   const { t, i18n } = useTranslation();
 
@@ -12,7 +12,7 @@ const Navbar = ({ theme, onToggleTheme }) => {
   };
 
   return (
-    <header className="sticky top-0 z-50 bg-white/80 dark:bg-[#0f172a]/80 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800 transition-colors duration-200">
+    <header className="sticky top-0 z-50 bg-white/80 dark:bg-[#0B0F19]/80 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800 transition-colors duration-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           
@@ -66,10 +66,18 @@ const Navbar = ({ theme, onToggleTheme }) => {
             </div>
           </nav>
 
-          {/* Mobile Menu Button - usually leads to a sidebar or dropdown, but here we have MobileNav */}
+          {/* Mobile Menu Button */}
           <div className="md:hidden flex items-center gap-3">
-             <button onClick={onToggleTheme} className="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800 text-sm">
+             <button onClick={onToggleTheme} className="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-100 dark:bg-gray-800 text-sm">
                 {theme === "dark" ? "☀️" : "🌙"}
+              </button>
+              <button 
+                onClick={onToggleSidebar}
+                className="w-10 h-10 flex flex-col items-center justify-center gap-1.5 rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-600/20 active:scale-90 transition-all"
+              >
+                <div className="w-5 h-0.5 bg-white rounded-full"></div>
+                <div className="w-5 h-0.5 bg-white rounded-full"></div>
+                <div className="w-5 h-0.5 bg-white rounded-full"></div>
               </button>
           </div>
 

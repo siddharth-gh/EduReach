@@ -6,8 +6,13 @@ import AdaptiveQuizSession from "../models/adaptiveQuizSession.model.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { trackStudentActivity } from "../utils/activity.utils.js";
 
+const TARGET_QUESTION_COUNT = 5;
 const DIFFICULTIES = ["easy", "medium", "hard"];
-const TARGET_QUESTION_COUNT = 10;
+const DIFFICULTY_WEIGHTS = {
+    easy: 10,
+    medium: 15,
+    hard: 20,
+};
 
 const asId = (value) => String(value?._id || value || "");
 
@@ -42,18 +47,30 @@ const summarizeSession = (session) => {
         })
     );
 
+    const maxPotentialPoints = session.targetQuestionCount * DIFFICULTY_WEIGHTS.hard;
+    const earnedPoints = session.answers.reduce(
+        (sum, ans) => sum + (ans.isCorrect ? DIFFICULTY_WEIGHTS[ans.difficulty] : 0),
+        0
+    );
+    const score = Number(Math.min(10, (earnedPoints / maxPotentialPoints) * 10).toFixed(1));
+
+    const sortedByMastery = [...masteryEntries].sort((a, b) => b.mastery - a.mastery);
+
     return {
         status: session.status,
         answeredCount: session.answers.length,
         targetQuestionCount: session.targetQuestionCount,
-        score: session.score,
+        score: score,
         correctCount: session.answers.filter((answer) => answer.isCorrect).length,
+        answers: session.answers,
         weakConcepts: masteryEntries
             .filter((item) => item.mastery < 60)
             .sort((a, b) => a.mastery - b.mastery),
         strongConcepts: masteryEntries
-            .filter((item) => item.mastery >= 75)
+            .filter((item) => item.mastery >= 70)
             .sort((a, b) => b.mastery - a.mastery),
+        bestConcept: sortedByMastery[0] || null,
+        worstConcept: [...sortedByMastery].reverse().find(c => c.mastery < 65) || null,
         conceptMastery: masteryEntries.sort((a, b) =>
             a.concept.localeCompare(b.concept)
         ),
@@ -199,16 +216,16 @@ const chooseNextQuestion = ({
 };
 
 const completeSession = async (session) => {
-    const correctCount = session.answers.filter((answer) => answer.isCorrect)
-        .length;
+    const maxPotentialPoints = session.targetQuestionCount * DIFFICULTY_WEIGHTS.hard;
+    const earnedPoints = session.answers.reduce(
+        (sum, ans) => sum + (ans.isCorrect ? DIFFICULTY_WEIGHTS[ans.difficulty] : 0),
+        0
+    );
 
     session.status = "completed";
     session.currentQuestionId = null;
     session.completedAt = new Date();
-    session.score =
-        session.answers.length === 0
-            ? 0
-            : Math.round((correctCount / session.answers.length) * 100);
+    session.score = Number(Math.min(10, (earnedPoints / maxPotentialPoints) * 10).toFixed(1));
 
     await session.save();
 };
@@ -306,6 +323,7 @@ export const submitAdaptiveQuizAnswer = asyncHandler(async (req, res) => {
     session.answers.push({
         questionId: currentQuestion._id,
         question: currentQuestion.question,
+        options: currentQuestion.options,
         selectedAnswer,
         correctAnswer: currentQuestion.correctAnswer,
         isCorrect,
@@ -361,9 +379,12 @@ export const submitAdaptiveQuizAnswer = asyncHandler(async (req, res) => {
     session.currentQuestionId = nextQuestion._id;
     session.servedQuestionIds.push(nextQuestion._id);
 
-    const correctCount = session.answers.filter((answer) => answer.isCorrect)
-        .length;
-    session.score = Math.round((correctCount / session.answers.length) * 100);
+    const maxPotentialPoints = session.targetQuestionCount * DIFFICULTY_WEIGHTS.hard;
+    const earnedPoints = session.answers.reduce(
+        (sum, ans) => sum + (ans.isCorrect ? DIFFICULTY_WEIGHTS[ans.difficulty] : 0),
+        0
+    );
+    session.score = Number(Math.min(10, (earnedPoints / maxPotentialPoints) * 10).toFixed(1));
     await session.save();
 
     res.json({

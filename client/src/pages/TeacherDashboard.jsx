@@ -19,10 +19,16 @@ const TeacherDashboard = () => {
           API.get("/courses/teacher/my-courses"),
           API.get("/analytics/teacher/overview")
         ]);
-        setCourses(courseRes.data.slice(0, 3)); // Just show recent 3
+        
+        console.log("Dashboard data loaded:", { courses: courseRes.data, analytics: analyticsRes.data });
+        
+        if (Array.isArray(courseRes.data)) {
+          setCourses(courseRes.data.slice(0, 3));
+        }
         setAnalytics(analyticsRes.data);
       } catch (err) {
-        setError("Failed to sync your dashboard data.");
+        console.error("Dashboard sync error:", err);
+        setError(`Sync Error: ${err.response?.data?.message || err.message}`);
       } finally {
         setLoading(false);
       }

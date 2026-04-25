@@ -6,6 +6,8 @@ const MAX_TRANSCRIPTION_BYTES = 25 * 1024 * 1024;
 const DEFAULT_WHISPER_MODEL = process.env.WHISPER_MODEL || "whisper-1";
 const ENABLE_WHISPER_TRANSCRIPTION =
     process.env.ENABLE_WHISPER_TRANSCRIPTION === "true";
+const WHISPER_API_URL = process.env.WHISPER_API_URL || "https://api.openai.com/v1";
+const WHISPER_API_KEY = process.env.WHISPER_API_KEY || process.env.OPENAI_API_KEY;
 const MOCK_AI_TRANSCRIPT = `Automatic video transcription is not available yet in testing mode.
 
 This sample transcript is provided so the lecture summary, MCQ generation, and text-only reading mode can be tested without using a paid transcription API.
@@ -15,17 +17,18 @@ In this lecture, the teacher introduces artificial intelligence as the ability o
 The lecture also discusses responsible use of AI. Students should understand that AI tools are helpful assistants, but their output should be checked for accuracy, fairness, and relevance to the learning material.`;
 
 const getOpenAiClient = () => {
-    if (!process.env.OPENAI_API_KEY) {
-        throw new Error("OPENAI_API_KEY is not configured");
+    if (!WHISPER_API_KEY && !WHISPER_API_URL.includes("localhost") && !WHISPER_API_URL.includes("127.0.0.1")) {
+        throw new Error("WHISPER_API_KEY or OPENAI_API_KEY is not configured");
     }
 
     return new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY,
+        apiKey: WHISPER_API_KEY || "local-no-key-needed",
+        baseURL: WHISPER_API_URL,
     });
 };
 
 export const isTranscriptionConfigured = () =>
-    ENABLE_WHISPER_TRANSCRIPTION && Boolean(process.env.OPENAI_API_KEY);
+    ENABLE_WHISPER_TRANSCRIPTION && (Boolean(WHISPER_API_KEY) || WHISPER_API_URL.includes("localhost") || WHISPER_API_URL.includes("127.0.0.1"));
 
 export const getMockTranscription = () => ({
     text: MOCK_AI_TRANSCRIPT,

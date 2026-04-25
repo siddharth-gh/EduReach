@@ -8,37 +8,6 @@ const DEFAULT_GOOGLE_AI_MODEL =
     process.env.GEMINI_MODEL ||
     "gemma-3-27b-it";
 
-const extractJson = (value) => {
-    if (!value) {
-        throw new Error("AI response was empty");
-    }
-
-    const directParse = (() => {
-        try {
-            return JSON.parse(value);
-        } catch {
-            return null;
-        }
-    })();
-
-    if (directParse) {
-        return directParse;
-    }
-
-    const fencedMatch = value.match(/```json\s*([\s\S]*?)```/i);
-
-    if (fencedMatch?.[1]) {
-        return JSON.parse(fencedMatch[1]);
-    }
-
-    const objectMatch = value.match(/\{[\s\S]*\}/);
-
-    if (!objectMatch) {
-        throw new Error("AI response did not contain valid JSON");
-    }
-
-    return JSON.parse(objectMatch[0]);
-};
 
 const normalizeGeminiError = (error) => {
     const rawMessage =
@@ -67,39 +36,55 @@ const getGeminiClient = () => {
         throw new Error("GEMINI_API_KEY is not configured");
     }
 
+    if (typeof GoogleGenAI !== 'function' && typeof GoogleGenAI !== 'object') {
+        console.error("GoogleGenAI is not properly imported. Check your @google/genai package.");
+        throw new Error("AI SDK not found");
+    }
+
     return new GoogleGenAI({
         apiKey: process.env.GEMINI_API_KEY,
     });
 };
 
-const isGeminiConfigured = () => Boolean(process.env.GEMINI_API_KEY);
-
-const generateWithGemini = async (
-    prompt,
-    model = DEFAULT_GOOGLE_AI_MODEL,
-    { temperature = 0.2 } = {}
-) => {
+const extractJson = (text) => {
     try {
-        const client = getGeminiClient();
-        const response = await client.models.generateContent({
-            model,
-            contents: prompt,
-            config: {
-                temperature,
-            },
-        });
-
-        return extractJson(response.text);
+        console.log("[AI Service] Raw text for extraction (first 100 chars):", text.substring(0, 100));
+        // Find JSON block more aggressively
+        const jsonMatch = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+        if (jsonMatch) {
+            const clean = jsonMatch[0];
+            return JSON.parse(clean);
+        }
+        return JSON.parse(text);
     } catch (error) {
-        normalizeGeminiError(error);
+        console.error("[AI Service] JSON Extraction failed. Raw text was:", text);
+        throw new Error("Failed to parse AI response as JSON");
     }
 };
 
-const generateJson = async (prompt, _schema, options = {}) => {
-    return generateWithGemini(prompt, options.model, {
-        temperature: options.temperature,
-    });
+export const generateWithGemini = async (prompt) => {
+    try {
+        const client = getGeminiClient();
+        const model = client.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-1.5-flash" });
+        
+        const contents = [{ role: 'user', parts: [{ text: prompt }] }];
+        const result = await model.generateContent({ contents });
+        const response = await result.response;
+        const text = response.text();
+        
+        console.log("[AI Service] AI Response Text received. Length:", text.length);
+        return extractJson(text);
+    } catch (error) {
+        console.error("[AI Service] Gemini Error:", error);
+        throw error;
+    }
 };
+
+const generateJson = async (prompt) => {
+    return generateWithGemini(prompt);
+};
+
+const isGeminiConfigured = () => Boolean(process.env.GEMINI_API_KEY);
 
 export const isAiConfigured = () => isGeminiConfigured();
 
@@ -209,9 +194,9 @@ Return strict JSON with this shape only:
 }
 
 Rules:
-- Keep replies grounded in the lecture context only.
-- If the user asks for MCQs, generate 3 or 4 good ones.
-- If the user asks a normal doubt, still include 1 or 2 MCQs when useful.
+- If the user explicitly asks for MCQs or practice questions, generate 3 or 4 good ones.
+- If the user asks a general question or doubt, focus on a clear explanation and ONLY include MCQs if they help reinforce the specific concept being discussed.
+- If the user is just chatting or MCQs are not helpful, return an empty array [] for "mcqs".
 - Do not use markdown.
 - Make options plausible and non-duplicative.
 - Return valid JSON only.`, {

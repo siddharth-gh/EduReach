@@ -23,7 +23,6 @@ import {
     isTranscriptionConfigured,
     transcribeAudioFile,
 } from "../services/transcription.service.js";
-import { uploadToS3, generateS3Key } from "../services/s3.service.js";
 
 const ensureFile = (file) => {
     if (!file) {
@@ -45,13 +44,17 @@ export const uploadImage = asyncHandler(async (req, res) => {
     });
 
     const extension = extensionFromName(req.file.originalname, ".jpg");
-    const s3Key = generateS3Key("images", `${req.file.originalname}${extension}`);
-    
-    const s3Url = await uploadToS3(optimized.buffer, s3Key, req.file.mimetype);
+    const saved = await writeLocalUpload({
+        buffer: optimized.buffer,
+        folderKey: "images",
+        originalFilename: req.file.originalname,
+        extension: extension,
+    });
+
+    const localUrl = buildPublicUploadUrl(req, "images", saved.filename);
 
     res.status(201).json({
-        url: s3Url,
-        s3Key,
+        url: localUrl,
         bytes: optimized.optimizedBytes,
         originalBytes: optimized.originalBytes,
         optimizedBytes: optimized.optimizedBytes,
@@ -74,9 +77,14 @@ export const uploadResource = asyncHandler(async (req, res) => {
             : req.file.buffer;
 
     const extension = extensionFromName(req.file.originalname, ".bin");
-    const s3Key = generateS3Key("resources", `${req.file.originalname}${extension}`);
-    
-    const s3Url = await uploadToS3(optimizedPdf.buffer, s3Key, req.file.mimetype);
+    const saved = await writeLocalUpload({
+        buffer: optimizedPdf.buffer,
+        folderKey: "resources",
+        originalFilename: req.file.originalname,
+        extension: extension,
+    });
+
+    const localUrl = buildPublicUploadUrl(req, "resources", saved.filename);
 
     let extractedText = "";
     try {
@@ -89,8 +97,7 @@ export const uploadResource = asyncHandler(async (req, res) => {
     }
 
     res.status(201).json({
-        url: s3Url,
-        s3Key,
+        url: localUrl,
         bytes: optimizedPdf.optimizedBytes,
         originalBytes: optimizedPdf.originalBytes,
         optimizedBytes: optimizedPdf.optimizedBytes,
@@ -127,20 +134,14 @@ export const uploadVideo = asyncHandler(async (req, res) => {
 
     pruneExpiredVideoJobs();
 
-    // Upload original to S3
-    const originalS3Key = generateS3Key("videos/original", `${req.file.originalname}${originalExtension}`);
-    const originalS3Url = await uploadToS3(
-        await fs.readFile(savedOriginal.absolutePath),
-        originalS3Key,
-        req.file.mimetype || "video/mp4"
-    );
+    const originalLocalUrl = buildPublicUploadUrl(req, "videos/original", savedOriginal.filename);
 
     const job = createVideoJob({
         status: "processing",
         progress: 38,
         message: "Upload complete. Preparing H.264 optimization...",
         stage: "queued",
-        originalUrl: originalS3Url,
+        originalUrl: originalLocalUrl,
         originalFilename: req.file.originalname,
         mimeType: req.file.mimetype,
         bytes: req.file.size,
@@ -162,24 +163,9 @@ export const uploadVideo = asyncHandler(async (req, res) => {
         },
     })
         .then(async (optimizedVideo) => {
-            // Upload artifacts to S3
-            const [optimizedUrl, audioUrl, thumbnailUrl] = await Promise.all([
-                uploadToS3(
-                    await fs.readFile(optimizedVideo.optimizedPath),
-                    generateS3Key("videos/optimized", optimizedVideo.optimizedFilename),
-                    "video/mp4"
-                ),
-                uploadToS3(
-                    await fs.readFile(optimizedVideo.audioPath),
-                    generateS3Key("videos/audio", optimizedVideo.audioFilename),
-                    "audio/mp4"
-                ),
-                uploadToS3(
-                    await fs.readFile(optimizedVideo.thumbnailPath),
-                    generateS3Key("videos/thumbnails", optimizedVideo.thumbnailFilename),
-                    "image/jpeg"
-                ),
-            ]);
+            const optimizedUrl = buildPublicUploadUrl(req, "videos/optimized", optimizedVideo.optimizedFilename);
+            const audioUrl = buildPublicUploadUrl(req, "videos/audio", optimizedVideo.audioFilename);
+            const thumbnailUrl = buildPublicUploadUrl(req, "thumbnails", optimizedVideo.thumbnailFilename);
 
             let transcript = {
                 status: "idle",
@@ -234,7 +220,7 @@ export const uploadVideo = asyncHandler(async (req, res) => {
                 message: "Video processing finished. Ready to attach.",
                 stage: "complete",
                 result: {
-                    url: originalS3Url,
+                    url: originalLocalUrl,
                     optimizedUrl,
                     audioOnlyUrl: audioUrl,
                     thumbnailUrl,
@@ -250,17 +236,8 @@ export const uploadVideo = asyncHandler(async (req, res) => {
                 },
             });
 
-            // Cleanup local files
-            try {
-                await Promise.all([
-                    fs.unlink(savedOriginal.absolutePath),
-                    fs.unlink(optimizedVideo.optimizedPath),
-                    fs.unlink(optimizedVideo.audioPath),
-                    fs.unlink(optimizedVideo.thumbnailPath),
-                ]);
-            } catch (err) {
-                console.error("Local file cleanup failed:", err.message);
-            }
+            // We KEEP local files in this mode because they ARE the storage
+            // In S3 mode we would unlink them.
         })
         .catch((error) => {
             updateVideoJob(job.jobId, {
@@ -271,7 +248,7 @@ export const uploadVideo = asyncHandler(async (req, res) => {
                     "Original video is uploaded, but optimization failed. You can still save the lecture or retry later.",
                 error: error.message,
                 result: {
-                    url: originalS3Url,
+                    url: originalLocalUrl,
                     bytes: req.file.size,
                     originalFilename: req.file.originalname,
                     mimeType: req.file.mimetype,
@@ -287,7 +264,7 @@ export const uploadVideo = asyncHandler(async (req, res) => {
         status: job.status,
         progress: job.progress,
         message: job.message,
-        url: originalS3Url,
+        url: originalLocalUrl,
         bytes: req.file.size,
         originalFilename: req.file.originalname,
         mimeType: req.file.mimetype,

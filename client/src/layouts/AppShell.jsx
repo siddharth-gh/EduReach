@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Navbar from "../components/Navbar";
-import MobileNav from "../components/MobileNav";
+import MobileSidebar from "../components/MobileSidebar";
 
 const AppShell = ({ children }) => {
   const { t } = useTranslation();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [installEvent, setInstallEvent] = useState(null);
   const [isStandalone, setIsStandalone] = useState(false);
@@ -86,7 +87,7 @@ const AppShell = ({ children }) => {
   };
 
   return (
-    <div className="min-h-screen bg-white dark:bg-[#0f172a] transition-colors duration-200">
+    <div className="min-h-screen bg-white dark:bg-[#0B0F19] transition-colors duration-200">
       {isOffline ? (
         <div className="bg-red-600 text-white text-center py-2 text-sm font-medium">
           {t("app.offlineBanner")}
@@ -118,9 +119,16 @@ const AppShell = ({ children }) => {
           ) : null}
         </div>
       ) : null}
-      <Navbar theme={theme} onToggleTheme={toggleTheme} />
+      <Navbar 
+        theme={theme} 
+        onToggleTheme={toggleTheme} 
+        onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} 
+      />
       <main className="shell-content">{children}</main>
-      <MobileNav />
+      <MobileSidebar 
+        isOpen={isSidebarOpen} 
+        onClose={() => setIsSidebarOpen(false)} 
+      />
     </div>
   );
 };

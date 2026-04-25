@@ -1,74 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import API from "../api/api";
 import SidebarLayout from "../layouts/SidebarLayout";
-
-const emptyModuleForm = { title: "", order: 1 };
-const emptyLectureForm = {
-  title: "",
-  order: 1,
-  mediaType: "none",
-  textContent: "",
-  imageUrl: "",
-  imagePublicLabel: "",
-  imageFileName: "",
-  imageOriginalSize: 0,
-  imageOptimizedSize: 0,
-  imageIsOptimized: false,
-  videoUrl: "",
-  videoOptimizedUrl: "",
-  videoAudioOnlyUrl: "",
-  videoThumbnailUrl: "",
-  videoPublicLabel: "",
-  videoFileName: "",
-  videoSelectedSize: 0,
-  videoCodec: "",
-  videoDuration: 0,
-  videoOriginalSize: 0,
-  videoOptimizedSize: 0,
-  videoAudioOnlySize: 0,
-  videoLowBandwidthOptimized: false,
-  transcriptText: "",
-  transcriptSource: "",
-  resourceTitle: "",
-  resourceUrl: "",
-  resourceType: "pdf",
-  resourcePublicLabel: "",
-  resourceFileName: "",
-  resourceExtractedText: "",
-  resourceOriginalSize: 0,
-  resourceOptimizedSize: 0,
-  resourceIsOptimized: false,
-};
-const emptyQuizForm = {
-  title: "",
-  description: "",
-  passingScore: 50,
-  timeLimitMinutes: 0,
-  questions: [
-    {
-      questionText: "",
-      optionA: "",
-      optionB: "",
-      optionC: "",
-      optionD: "",
-      correctAnswer: 0,
-      explanation: "",
-    },
-  ],
-};
-
-const formatFileSize = (bytes) => {
-  if (!bytes) return "0 B";
-  const units = ["B", "KB", "MB", "GB"];
-  let value = bytes;
-  let index = 0;
-  while (value >= 1024 && index < units.length - 1) {
-    value /= 1024;
-    index += 1;
-  }
-  return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
-};
 
 const TeacherCourseBuilder = () => {
   const { courseId } = useParams();
@@ -76,102 +9,258 @@ const TeacherCourseBuilder = () => {
   const [course, setCourse] = useState(null);
   const [modules, setModules] = useState([]);
   const [lecturesByModule, setLecturesByModule] = useState({});
-  const [quizzesByModule, setQuizzesByModule] = useState({});
-  const [attemptsByQuiz, setAttemptsByQuiz] = useState({});
-  const [moduleForm, setModuleForm] = useState(emptyModuleForm);
-  const [lectureForms, setLectureForms] = useState({});
-  const [quizForms, setQuizForms] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingModuleId, setEditingModuleId] = useState(null);
+  const [moduleForm, setModuleForm] = useState({ title: "", order: 1 });
   const [editingLectureId, setEditingLectureId] = useState(null);
+  
+  const emptyLectureForm = {
+    title: "",
+    order: 1,
+    mediaType: "none", // 'none', 'video', 'image', 'pdf'
+    textContent: "",
+    imageUrl: "",
+    imageOriginalSize: 0,
+    imageOptimizedSize: 0,
+    imageIsOptimized: false,
+    videoUrl: "",
+    videoOptimizedUrl: "",
+    videoAudioOnlyUrl: "",
+    videoThumbnailUrl: "",
+    videoCodec: "",
+    videoDuration: 0,
+    videoOriginalSize: 0,
+    videoOptimizedSize: 0,
+    videoAudioOnlySize: 0,
+    videoLowBandwidthOptimized: false,
+    transcriptText: "",
+    transcriptSource: "whisper",
+    resourceUrl: "",
+    resourceTitle: "",
+    resourceType: "pdf",
+    resourceFileName: "",
+    resourceExtractedText: "",
+    resourceOriginalSize: 0,
+    resourceOptimizedSize: 0,
+    resourceIsOptimized: false
+  };
+
+  const [lectureForms, setLectureForms] = useState({});
+  const [activePolls, setActivePolls] = useState({});
   const [editingQuizId, setEditingQuizId] = useState(null);
   const [uploadStatusByModule, setUploadStatusByModule] = useState({});
   const [uploadProgressByModule, setUploadProgressByModule] = useState({});
+  const [uploadMessageByModule, setUploadMessageByModule] = useState({});
   const [error, setError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [loading, setLoading] = useState(true);
-  const videoPollingRefs = useRef({});
+
+  const fetchCourseData = useCallback(async () => {
+    try {
+      const res = await API.get(`/courses/${courseId}`);
+      setCourse(res.data);
+      const modRes = await API.get(`/modules/${courseId}`);
+      setModules(modRes.data);
+      
+      const lectureMap = {};
+      for (const m of modRes.data) {
+        const lecRes = await API.get(`/lectures/${m._id}`);
+        lectureMap[m._id] = lecRes.data;
+      }
+      setLecturesByModule(lectureMap);
+    } catch (err) {
+      setError("Failed to load course data");
+    } finally {
+      setLoading(false);
+    }
+  }, [courseId]);
+
+  useEffect(() => {
+    fetchCourseData();
+  }, [fetchCourseData]);
 
   const stopVideoPolling = (moduleId) => {
-    if (videoPollingRefs.current[moduleId]) {
-      clearInterval(videoPollingRefs.current[moduleId]);
-      delete videoPollingRefs.current[moduleId];
+    if (activePolls[moduleId]) {
+      clearInterval(activePolls[moduleId]);
+      setActivePolls(curr => {
+        const next = { ...curr };
+        delete next[moduleId];
+        return next;
+      });
     }
+  };
+
+  const startVideoPolling = (jobId, moduleId) => {
+    stopVideoPolling(moduleId);
+    
+    const poll = async () => {
+      try {
+        const res = await API.get(`/uploads/video/status/${jobId}`);
+        const job = res.data;
+        
+        setUploadProgressByModule(curr => ({ ...curr, [moduleId]: job.progress }));
+        setUploadStatusByModule(curr => ({ ...curr, [moduleId]: job.status }));
+        setUploadMessageByModule(curr => ({ ...curr, [moduleId]: job.message }));
+
+        if (job.status === "ready" && job.result) {
+          stopVideoPolling(moduleId);
+          const result = job.result;
+          
+          setLectureForms(curr => {
+            const form = curr[moduleId] || emptyLectureForm;
+            return {
+              ...curr,
+              [moduleId]: {
+                ...form,
+                mediaType: "video",
+                videoUrl: result.url,
+                videoOptimizedUrl: result.optimizedUrl,
+                videoAudioOnlyUrl: result.audioOnlyUrl,
+                videoThumbnailUrl: result.thumbnailUrl,
+                videoCodec: result.codec,
+                videoDuration: result.duration,
+                videoOriginalSize: result.bytes,
+                videoOptimizedSize: result.optimizedBytes,
+                videoAudioOnlySize: result.audioOnlyBytes,
+                videoLowBandwidthOptimized: result.isLowBandwidthOptimized,
+                transcriptText: result.transcript?.text || "",
+                transcriptSource: result.transcript?.source || "whisper",
+              }
+            };
+          });
+          setUploadStatusByModule(curr => ({ ...curr, [moduleId]: "ready" }));
+          setUploadMessageByModule(curr => ({ ...curr, [moduleId]: "Adaptive media package is ready." }));
+        } else if (job.status === "failed") {
+          stopVideoPolling(moduleId);
+          setError(`Video processing failed: ${job.error || "Unknown error"}`);
+          setUploadStatusByModule(curr => ({ ...curr, [moduleId]: "Failed" }));
+        }
+      } catch (err) {
+        console.error("Polling error:", err);
+      }
+    };
+
+    const interval = setInterval(poll, 3000);
+    setActivePolls(curr => ({ ...curr, [moduleId]: interval }));
+    poll();
   };
 
   const buildLecturePayload = (form, moduleId) => {
     const contents = [];
-    const mediaType = form.mediaType || "none";
-    if (form.textContent.trim()) contents.push({ type: "text", data: form.textContent.trim(), order: 1 });
-    if (mediaType === "image" && form.imageUrl.trim()) contents.push({ type: "image", url: form.imageUrl.trim(), originalSize: Number(form.imageOriginalSize) || 0, optimizedSize: Number(form.imageOptimizedSize) || 0, isOptimized: Boolean(form.imageIsOptimized), order: contents.length + 1 });
-    if (mediaType === "video" && form.videoUrl.trim()) contents.push({ type: "video", url: form.videoUrl.trim(), optimizedUrl: form.videoOptimizedUrl.trim(), audioOnlyUrl: form.videoAudioOnlyUrl.trim(), thumbnailUrl: form.videoThumbnailUrl.trim(), codec: form.videoCodec || "", duration: Number(form.videoDuration) || 0, originalSize: Number(form.videoOriginalSize) || 0, optimizedSize: Number(form.videoOptimizedSize) || 0, audioOnlySize: Number(form.videoAudioOnlySize) || 0, isLowBandwidthOptimized: Boolean(form.videoLowBandwidthOptimized), order: contents.length + 1 });
+    const mediaType = form?.mediaType || "none";
+    const textContent = form?.textContent || "";
+    const title = form?.title || "Untitled Lecture";
+    const order = Number(form?.order) || 1;
+
+    if (textContent.trim()) {
+      contents.push({ type: "text", data: textContent.trim(), order: 1 });
+    }
+
+    if (mediaType === "image" && form?.imageUrl?.trim()) {
+      contents.push({ 
+        type: "image", 
+        url: form.imageUrl.trim(), 
+        originalSize: Number(form.imageOriginalSize) || 0, 
+        optimizedSize: Number(form.imageOptimizedSize) || 0, 
+        isOptimized: Boolean(form.imageIsOptimized), 
+        order: contents.length + 1 
+      });
+    }
+
+    if (mediaType === "video" && form?.videoUrl?.trim()) {
+      contents.push({ 
+        type: "video", 
+        url: form.videoUrl.trim(), 
+        optimizedUrl: form.videoOptimizedUrl?.trim() || "", 
+        audioOnlyUrl: form.videoAudioOnlyUrl?.trim() || "", 
+        thumbnailUrl: form.videoThumbnailUrl?.trim() || "", 
+        codec: form.videoCodec || "", 
+        duration: Number(form.videoDuration) || 0, 
+        originalSize: Number(form.videoOriginalSize) || 0, 
+        optimizedSize: Number(form.videoOptimizedSize) || 0, 
+        audioOnlySize: Number(form.videoAudioOnlySize) || 0, 
+        isLowBandwidthOptimized: Boolean(form.videoLowBandwidthOptimized), 
+        order: contents.length + 1 
+      });
+    }
+
+    const transcriptText = form?.transcriptText || "";
+    const transcriptSource = form?.transcriptSource || "";
+
     return {
-      moduleId, title: form.title, order: Number(form.order), contents,
-      transcript: { text: mediaType === "video" ? form.transcriptText.trim() : "", source: (mediaType === "video" && form.transcriptText.trim()) ? form.transcriptSource || "manual" : "" },
-      resources: (mediaType === "pdf" && form.resourceTitle.trim() && form.resourceUrl.trim()) ? [{ title: form.resourceTitle.trim(), url: form.resourceUrl.trim(), type: form.resourceType || "pdf", originalFilename: form.resourceFileName || "", extractedText: form.resourceExtractedText || "", originalSize: Number(form.resourceOriginalSize) || 0, optimizedSize: Number(form.resourceOptimizedSize) || 0, isOptimized: Boolean(form.resourceIsOptimized) }] : []
+      moduleId,
+      title: title.trim(),
+      order,
+      contents,
+      transcript: { 
+        text: mediaType === "video" ? transcriptText.trim() : "", 
+        source: (mediaType === "video" && transcriptText.trim()) ? transcriptSource || "whisper" : "" 
+      },
+      resources: (mediaType === "pdf" && form?.resourceTitle?.trim() && form?.resourceUrl?.trim()) ? [{ 
+        title: form.resourceTitle.trim(), 
+        url: form.resourceUrl.trim(), 
+        type: form.resourceType || "pdf", 
+        originalFilename: form.resourceFileName || "", 
+        extractedText: form.resourceExtractedText || "", 
+        originalSize: Number(form.resourceOriginalSize) || 0, 
+        optimizedSize: Number(form.resourceOptimizedSize) || 0, 
+        isOptimized: Boolean(form.resourceIsOptimized) 
+      }] : []
     };
   };
 
   const hydrateLectureForm = (lecture) => {
-    const textItem = lecture.contents?.find((item) => item.type === "text");
-    const imageItem = lecture.contents?.find((item) => item.type === "image");
-    const videoItem = lecture.contents?.find((item) => item.type === "video");
+    const videoItem = lecture.contents?.find(c => c.type === "video");
+    const imageItem = lecture.contents?.find(c => c.type === "image");
+    const textItem = lecture.contents?.find(c => c.type === "text");
+    const resourceItem = lecture.resources?.[0];
+
     return {
-      ...emptyLectureForm,
       title: lecture.title,
       order: lecture.order,
-      mediaType: imageItem ? "image" : videoItem ? "video" : lecture.resources?.[0] ? "pdf" : "none",
+      mediaType: videoItem ? "video" : imageItem ? "image" : "none",
       textContent: textItem?.data || "",
       imageUrl: imageItem?.url || "",
       imageOriginalSize: imageItem?.originalSize || 0,
       imageOptimizedSize: imageItem?.optimizedSize || 0,
-      imageIsOptimized: Boolean(imageItem?.isOptimized),
+      imageIsOptimized: imageItem?.isOptimized || false,
       videoUrl: videoItem?.url || "",
       videoOptimizedUrl: videoItem?.optimizedUrl || "",
       videoAudioOnlyUrl: videoItem?.audioOnlyUrl || "",
       videoThumbnailUrl: videoItem?.thumbnailUrl || "",
-      videoPublicLabel: videoItem?.url ? "Video attached" : "",
       videoCodec: videoItem?.codec || "",
       videoDuration: videoItem?.duration || 0,
       videoOriginalSize: videoItem?.originalSize || 0,
       videoOptimizedSize: videoItem?.optimizedSize || 0,
       videoAudioOnlySize: videoItem?.audioOnlySize || 0,
-      videoLowBandwidthOptimized: Boolean(videoItem?.isLowBandwidthOptimized),
+      videoLowBandwidthOptimized: videoItem?.isLowBandwidthOptimized || false,
       transcriptText: lecture.transcript?.text || "",
-      transcriptSource: lecture.transcript?.source || "",
-      resourceTitle: lecture.resources?.[0]?.title || "",
-      resourceUrl: lecture.resources?.[0]?.url || "",
-      resourceType: lecture.resources?.[0]?.type || "pdf",
-      resourceExtractedText: lecture.resources?.[0]?.extractedText || "",
-      resourceOriginalSize: lecture.resources?.[0]?.originalSize || 0,
-      resourceOptimizedSize: lecture.resources?.[0]?.optimizedSize || 0,
-      resourceIsOptimized: Boolean(lecture.resources?.[0]?.isOptimized),
+      transcriptSource: lecture.transcript?.source || "whisper",
+      resourceUrl: resourceItem?.url || "",
+      resourceTitle: resourceItem?.title || "",
+      resourceType: resourceItem?.type || "pdf",
+      resourceFileName: resourceItem?.originalFilename || "",
+      resourceExtractedText: resourceItem?.extractedText || "",
+      resourceOriginalSize: resourceItem?.originalSize || 0,
+      resourceOptimizedSize: resourceItem?.optimizedSize || 0,
+      resourceIsOptimized: resourceItem?.isOptimized || false
     };
   };
 
-  const fetchCourseData = async () => {
-    setLoading(true);
+  const handleModuleSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
     try {
-      const [courseRes, modulesRes] = await Promise.all([API.get(`/courses/${courseId}`), API.get(`/modules/${courseId}`)]);
-      setCourse(courseRes.data);
-      setModules(modulesRes.data);
-      const lecEntries = await Promise.all(modulesRes.data.map(async (m) => [m._id, (await API.get(`/lectures/${m._id}`)).data]));
-      const quizEntries = await Promise.all(modulesRes.data.map(async (m) => [m._id, (await API.get(`/quizzes/module/${m._id}`)).data]));
-      setLecturesByModule(Object.fromEntries(lecEntries));
-      setQuizzesByModule(Object.fromEntries(quizEntries));
-      const flattenedQuizzes = quizEntries.flatMap(([, items]) => items);
-      const attemptEntries = await Promise.all(flattenedQuizzes.map(async (q) => [q._id, (await API.get(`/quiz-attempts/quiz/${q._id}`)).data]));
-      setAttemptsByQuiz(Object.fromEntries(attemptEntries));
-    } catch { setError("Failed to load course builder"); }
-    finally { setLoading(false); }
-  };
-
-  useEffect(() => { fetchCourseData(); }, [courseId]);
-  
-  const startModuleEdit = (m) => {
-    setModuleForm({ title: m.title, order: m.order });
-    setEditingModuleId(m._id);
-    // Scroll to the add module form
-    document.querySelector('aside')?.scrollIntoView({ behavior: 'smooth' });
+      if (editingModuleId) await API.put(`/modules/${editingModuleId}`, moduleForm);
+      else await API.post("/modules", { ...moduleForm, courseId });
+      setModuleForm({ title: "", order: 1 });
+      setEditingModuleId(null);
+      fetchCourseData();
+    } catch (err) {
+      setError("Failed to save module");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const updateLectureForm = (moduleId, field, value) => {
@@ -184,262 +273,336 @@ const TeacherCourseBuilder = () => {
     }));
   };
 
-  const handleModuleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      if (editingModuleId) await API.put(`/modules/${editingModuleId}`, moduleForm);
-      else await API.post("/modules", { ...moduleForm, courseId });
-      setModuleForm(emptyModuleForm);
-      setEditingModuleId(null);
-      await fetchCourseData();
-    } catch { setError("Failed to save module"); }
-  };
-
   const uploadLectureAsset = async (moduleId, file, type) => {
-    if (!file) return;
     const formData = new FormData();
     formData.append("file", file);
+    
     setUploadStatusByModule(curr => ({ ...curr, [moduleId]: "Uploading..." }));
+    setUploadProgressByModule(curr => ({ ...curr, [moduleId]: 0 }));
+    
     try {
-      const endpoint = type === "image" ? "/uploads/image" : type === "video" ? "/uploads/video" : "/uploads/resource";
-      const res = await API.post(endpoint, formData, { headers: { "Content-Type": "multipart/form-data" } });
-      const data = res.data;
-      setLectureForms(curr => {
-        const form = curr[moduleId] || emptyLectureForm;
-        if (type === "video") return { ...curr, [moduleId]: { ...form, videoUrl: data.url, videoThumbnailUrl: data.thumbnailUrl, videoDuration: data.duration, videoOriginalSize: data.bytes } };
-        if (type === "image") return { ...curr, [moduleId]: { ...form, imageUrl: data.url, imageOriginalSize: data.bytes } };
-        return { ...curr, [moduleId]: { ...form, resourceUrl: data.url, resourceTitle: file.name, resourceOriginalSize: data.bytes } };
+      const endpoint = type === "image" ? "/uploads/image" : type === "pdf" ? "/uploads/resource" : "/uploads/video";
+      const res = await API.post(endpoint, formData, {
+        onUploadProgress: (p) => {
+          const progress = Math.round((p.loaded * 100) / p.total);
+          setUploadProgressByModule(curr => ({ ...curr, [moduleId]: progress }));
+        }
       });
-      setUploadStatusByModule(curr => ({ ...curr, [moduleId]: "Ready!" }));
-    } catch { setError("Upload failed"); }
+      
+      const { data } = res;
+      if (type === "video") {
+        startVideoPolling(data.jobId, moduleId);
+      } else {
+        setLectureForms(curr => {
+          const form = curr[moduleId] || emptyLectureForm;
+          if (type === "image") return { ...curr, [moduleId]: { ...form, mediaType: "image", imageUrl: data.url, imageOriginalSize: data.originalBytes, imageOptimizedSize: data.optimizedBytes, imageIsOptimized: data.isOptimized } };
+          return { ...curr, [moduleId]: { ...form, mediaType: "pdf", resourceUrl: data.url, resourceTitle: file.name, resourceFileName: file.name, resourceOriginalSize: data.originalBytes, resourceOptimizedSize: data.optimizedBytes, resourceIsOptimized: data.isOptimized, resourceExtractedText: data.extractedText } };
+        });
+        setUploadStatusByModule(curr => ({ ...curr, [moduleId]: "Ready!" }));
+      }
+    } catch (err) {
+      setError("Upload failed");
+      setUploadStatusByModule(curr => ({ ...curr, [moduleId]: "Error" }));
+    }
   };
 
   const handleLectureSubmit = async (e, moduleId) => {
     e.preventDefault();
+    setError("");
+    
+    const status = uploadStatusByModule[moduleId];
+    console.log("Submitting lecture for module:", moduleId, "Status:", status);
+
+    if (status && status !== "ready" && status !== "Error" && status !== "Ready!") {
+      setError("Please wait for video processing to complete.");
+      return;
+    }
+
+    if (!lectureForms[moduleId]?.title?.trim()) {
+      setError("Lecture title is required");
+      return;
+    }
+
     const payload = buildLecturePayload(lectureForms[moduleId] || emptyLectureForm, moduleId);
+    console.log("Lecture payload:", payload);
+
+    setIsSubmitting(true);
     try {
       if (editingLectureId) await API.put(`/lectures/${editingLectureId}`, payload);
       else await API.post("/lectures", payload);
       setLectureForms(curr => ({ ...curr, [moduleId]: emptyLectureForm }));
       setEditingLectureId(null);
-      await fetchCourseData();
-    } catch { setError("Failed to save lecture"); }
+      setUploadStatusByModule(curr => { const n = {...curr}; delete n[moduleId]; return n; });
+      fetchCourseData();
+    } catch (err) {
+      setError("Failed to save lecture");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  if (loading) return <SidebarLayout><div className="p-10 animate-pulse"><div className="h-12 bg-gray-200 dark:bg-gray-800 rounded-2xl w-1/4 mb-8"></div><div className="h-96 bg-gray-100 dark:bg-gray-800/50 rounded-[40px]"></div></div></SidebarLayout>;
+  if (loading) return <div className="min-h-screen bg-[#0B0F19] flex items-center justify-center text-white">Loading...</div>;
 
   return (
     <SidebarLayout>
-      <div className="p-6 lg:p-10 space-y-10">
-        
-        {/* Header */}
-        <header className="flex flex-wrap items-center justify-between gap-6">
-           <div>
-              <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[10px] font-black rounded-full uppercase tracking-widest mb-3 inline-block">Course Architect</span>
-              <h1 className="text-3xl lg:text-4xl font-black text-gray-900 dark:text-white">{course?.title}</h1>
-              <p className="text-gray-500 mt-2">Manage modules, lectures, and assessments.</p>
-           </div>
-           <div className="flex gap-3">
-              <button onClick={() => navigate(`/course/${courseId}`)} className="px-6 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-bold rounded-xl hover:bg-gray-200 transition-all">Preview Course</button>
-           </div>
-        </header>
-
-        {error && <div className="p-6 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/50 rounded-3xl text-red-600 font-bold">{error}</div>}
-
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-10 items-start">
+      <div className="min-h-screen bg-[#0B0F19] text-gray-300 font-sans selection:bg-blue-500/30">
+        <div className="max-w-7xl mx-auto px-6 py-12">
            
-           {/* Sidebar Module Navigation / Fast Access */}
-           <aside className="xl:col-span-1 space-y-6 sticky top-6">
-              <div className="bg-white dark:bg-gray-900 rounded-[40px] border border-gray-100 dark:border-gray-800 p-8 shadow-xl shadow-blue-600/5">
-                 <h3 className="text-xl font-black text-gray-900 dark:text-white mb-6 uppercase tracking-tight">Course Outline</h3>
-                 <div className="space-y-2">
-                    {modules.map((m) => (
-                      <button key={m._id} onClick={() => document.getElementById(`module-${m._id}`).scrollIntoView({ behavior: 'smooth' })} className="w-full text-left p-4 rounded-2xl text-xs font-bold text-gray-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 transition-all flex items-center gap-3">
-                         <span className="w-6 h-6 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-[10px]">{m.order}</span>
-                         {m.title}
-                      </button>
+           <header className="mb-12 flex items-center justify-between">
+              <div>
+                 <h1 className="text-3xl font-black text-white uppercase tracking-tighter mb-2">{course?.title}</h1>
+                 <p className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.3em]">Course Architecture & Content Matrix</p>
+              </div>
+              <div className="flex gap-4">
+                 <button onClick={() => navigate('/teacher/dashboard')} className="px-6 py-3 bg-[#111827] border border-gray-800 text-[10px] font-black text-gray-400 uppercase tracking-widest rounded-xl hover:text-white transition-all">Back to Dashboard</button>
+                 <button onClick={() => setEditingModuleId('new')} className="px-8 py-3 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all">Create New Module</button>
+              </div>
+           </header>
+
+           {error && (
+             <div className="mb-8 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center gap-3 text-red-500">
+               <span className="text-xl">⚠️</span>
+               <span className="text-xs font-bold uppercase tracking-widest">{error}</span>
+             </div>
+           )}
+
+           <main className="space-y-16">
+              <div className="space-y-6">
+                 <h2 className="text-lg font-black text-white uppercase tracking-tight">CURRICULUM MODULES</h2>
+                 <div className="grid grid-cols-1 gap-8">
+                    {modules.map(m => (
+                      <div key={m._id} className="bg-[#111827]/50 border border-gray-800/50 rounded-3xl p-8 backdrop-blur-xl hover:border-gray-700 transition-all">
+                         <div className="flex items-center justify-between mb-8">
+                            <div className="flex items-center gap-4">
+                               <div className="w-12 h-12 rounded-2xl bg-blue-600/10 flex items-center justify-center text-blue-500 font-black text-lg">{m.order}</div>
+                               <h3 className="text-xl font-black text-white uppercase tracking-tight">{m.title}</h3>
+                            </div>
+                            <div className="flex gap-4">
+                               <button onClick={() => { setEditingModuleId(m._id); setModuleForm({ title: m.title, order: m.order }); }} className="text-[10px] font-black text-gray-500 uppercase tracking-widest hover:text-white transition-all">Edit Module</button>
+                               <button className="text-[10px] font-black text-red-500/50 uppercase tracking-widest hover:text-red-500 transition-all">Delete</button>
+                            </div>
+                         </div>
+
+                         <form onSubmit={e => handleLectureSubmit(e, m._id)} className="space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                               <div className="md:col-span-3 space-y-2">
+                                  <label className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em]">Lecture Title</label>
+                                  <input 
+                                    type="text" 
+                                    placeholder="Enter compelling lecture title..."
+                                    className="w-full bg-[#0B0F19] border border-gray-800 rounded-xl px-5 py-4 text-sm text-white placeholder:text-gray-700 focus:outline-none focus:border-blue-500 transition-all"
+                                    value={lectureForms[m._id]?.title || ""}
+                                    onChange={e => updateLectureForm(m._id, 'title', e.target.value)}
+                                  />
+                               </div>
+                               <div className="space-y-2">
+                                  <label className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em]">Order Index</label>
+                                  <input 
+                                    type="number" 
+                                    className="w-full bg-[#0B0F19] border border-gray-800 rounded-xl px-5 py-4 text-sm text-white focus:outline-none focus:border-blue-500 transition-all"
+                                    value={lectureForms[m._id]?.order || 1}
+                                    onChange={e => updateLectureForm(m._id, 'order', e.target.value)}
+                                  />
+                               </div>
+                            </div>
+
+                            <div className="space-y-2">
+                               <label className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em]">Lecture Notes / Text Content</label>
+                               <textarea 
+                                 placeholder="Add important notes, code snippets, or extra context here..."
+                                 className="w-full bg-[#0B0F19] border border-gray-800 rounded-xl px-5 py-4 text-sm text-white placeholder:text-gray-700 focus:outline-none focus:border-blue-500 transition-all min-h-[100px] resize-none"
+                                 value={lectureForms[m._id]?.textContent || ""}
+                                 onChange={e => updateLectureForm(m._id, 'textContent', e.target.value)}
+                               />
+                            </div>
+
+                            <div className="bg-[#0B0F19] border border-gray-800/50 rounded-2xl p-6 space-y-6">
+                               <div className="flex items-center gap-6">
+                                  <label className="flex items-center gap-2 cursor-pointer group">
+                                     <input type="radio" name={`type-${m._id}`} className="hidden" checked={lectureForms[m._id]?.mediaType === 'video'} onChange={() => updateLectureForm(m._id, 'mediaType', 'video')} />
+                                     <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${lectureForms[m._id]?.mediaType === 'video' ? 'border-blue-500 bg-blue-500' : 'border-gray-800'}`}>
+                                        <div className="w-1.5 h-1.5 rounded-full bg-white opacity-0 group-hover:opacity-100 transition-all" />
+                                     </div>
+                                     <span className={`text-[10px] font-black uppercase tracking-widest ${lectureForms[m._id]?.mediaType === 'video' ? 'text-white' : 'text-gray-500'}`}>Video Master</span>
+                                  </label>
+                                  <label className="flex items-center gap-2 cursor-pointer group">
+                                     <input type="radio" name={`type-${m._id}`} className="hidden" checked={lectureForms[m._id]?.mediaType === 'pdf'} onChange={() => updateLectureForm(m._id, 'mediaType', 'pdf')} />
+                                     <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${lectureForms[m._id]?.mediaType === 'pdf' ? 'border-blue-500 bg-blue-500' : 'border-gray-800'}`}>
+                                        <div className="w-1.5 h-1.5 rounded-full bg-white opacity-0 group-hover:opacity-100 transition-all" />
+                                     </div>
+                                     <span className={`text-[10px] font-black uppercase tracking-widest ${lectureForms[m._id]?.mediaType === 'pdf' ? 'text-white' : 'text-gray-500'}`}>Smart Resource</span>
+                                  </label>
+                               </div>
+
+                               <div className="space-y-4">
+                                  {lectureForms[m._id]?.mediaType === 'video' && (
+                                    <div className="space-y-4">
+                                      <div className="flex items-center justify-between p-4 bg-blue-500/5 border border-blue-500/10 rounded-xl">
+                                         <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 rounded-xl bg-blue-600/10 flex items-center justify-center text-blue-500 text-xl">📁</div>
+                                            <div>
+                                               <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Video Source</p>
+                                               <p className="text-xs text-gray-400 mt-1">{lectureForms[m._id]?.videoUrl ? "Video file attached" : "No video file selected"}</p>
+                                            </div>
+                                         </div>
+                                         <input type="file" id={`video-upload-${m._id}`} className="hidden" accept="video/*" onChange={e => e.target.files[0] && uploadLectureAsset(m._id, e.target.files[0], 'video')} />
+                                         <button type="button" onClick={() => document.getElementById(`video-upload-${m._id}`).click()} className="text-[10px] font-black text-blue-500 uppercase tracking-widest hover:text-blue-400">Change</button>
+                                      </div>
+
+                                      {(uploadStatusByModule[m._id] && uploadStatusByModule[m._id] !== "Error") && (
+                                        <div className="space-y-3 border-t border-gray-800 pt-4">
+                                           {/* Stage 1: Uploading */}
+                                           <div className="space-y-1.5">
+                                              <div className="flex items-center justify-between">
+                                                 <div className="flex items-center gap-2">
+                                                    <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] ${uploadStatusByModule[m._id] === "Uploading..." ? "bg-blue-600 text-white animate-pulse" : "bg-emerald-500 text-white"}`}>
+                                                       {uploadStatusByModule[m._id] === "Uploading..." ? "1" : "✓"}
+                                                    </div>
+                                                    <span className={`text-[9px] font-bold ${uploadStatusByModule[m._id] === "Uploading..." ? "text-white" : "text-gray-500"}`}>Uploading video</span>
+                                                 </div>
+                                                 {uploadStatusByModule[m._id] === "Uploading..." && <span className="text-[9px] font-bold text-blue-500">{uploadProgressByModule[m._id]}%</span>}
+                                              </div>
+                                              <div className="h-1 w-full bg-gray-800 rounded-full overflow-hidden">
+                                                 <div className={`h-full transition-all duration-500 ${uploadStatusByModule[m._id] === "Uploading..." ? "bg-blue-600" : "bg-emerald-500"}`} style={{ width: uploadStatusByModule[m._id] === "Uploading..." ? `${uploadProgressByModule[m._id]}%` : "100%" }}></div>
+                                              </div>
+                                           </div>
+
+                                           {/* Stage 2: H.264 Compression */}
+                                           <div className="space-y-1.5">
+                                              <div className="flex items-center justify-between">
+                                                 <div className="flex items-center gap-2">
+                                                    <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] ${uploadMessageByModule[m._id]?.includes("H.264") || uploadMessageByModule[m._id]?.includes("Preparing") ? "bg-blue-600 text-white animate-pulse" : (["Extracting audio", "Transcribing", "ready"].some(s => uploadMessageByModule[m._id]?.includes(s) || uploadStatusByModule[m._id] === s) ? "bg-emerald-500 text-white" : "bg-gray-800 text-gray-600")}`}>
+                                                       {(["Extracting audio", "Transcribing", "ready"].some(s => uploadMessageByModule[m._id]?.includes(s) || uploadStatusByModule[m._id] === s)) ? "✓" : "2"}
+                                                    </div>
+                                                    <span className={`text-[9px] font-bold ${(uploadMessageByModule[m._id]?.includes("H.264") || uploadMessageByModule[m._id]?.includes("Preparing")) ? "text-white" : "text-gray-500"}`}>H.264 Compression</span>
+                                                 </div>
+                                              </div>
+                                              <div className="h-1 w-full bg-gray-800 rounded-full overflow-hidden">
+                                                 <div className={`h-full transition-all duration-[4000ms] ease-out ${(uploadMessageByModule[m._id]?.includes("H.264") || uploadMessageByModule[m._id]?.includes("Preparing")) ? "bg-blue-600 w-[75%] animate-pulse" : (["Extracting audio", "Transcribing", "ready"].some(s => uploadMessageByModule[m._id]?.includes(s) || uploadStatusByModule[m._id] === s) ? "bg-emerald-500 w-full" : "w-0")}`}></div>
+                                              </div>
+                                           </div>
+
+                                           {/* Stage 3: Audio Extraction */}
+                                           <div className="space-y-1.5">
+                                              <div className="flex items-center justify-between">
+                                                 <div className="flex items-center gap-2">
+                                                    <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] ${uploadMessageByModule[m._id]?.includes("Extracting audio") ? "bg-blue-600 text-white animate-pulse" : (["Transcribing", "ready"].some(s => uploadMessageByModule[m._id]?.includes(s) || uploadStatusByModule[m._id] === s) ? "bg-emerald-500 text-white" : "bg-gray-800 text-gray-600")}`}>
+                                                       {(["Transcribing", "ready"].some(s => uploadMessageByModule[m._id]?.includes(s) || uploadStatusByModule[m._id] === s)) ? "✓" : "3"}
+                                                    </div>
+                                                    <span className={`text-[9px] font-bold ${uploadMessageByModule[m._id]?.includes("Extracting audio") ? "text-white" : "text-gray-500"}`}>Audio Extraction</span>
+                                                 </div>
+                                              </div>
+                                              <div className="h-1 w-full bg-gray-800 rounded-full overflow-hidden">
+                                                 <div className={`h-full transition-all duration-[3000ms] ease-out ${uploadMessageByModule[m._id]?.includes("Extracting audio") ? "bg-blue-600 w-[80%] animate-pulse" : (["Transcribing", "ready"].some(s => uploadMessageByModule[m._id]?.includes(s) || uploadStatusByModule[m._id] === s) ? "bg-emerald-500 w-full" : "w-0")}`}></div>
+                                              </div>
+                                           </div>
+
+                                           {/* Stage 4: AI Transcription */}
+                                           <div className="space-y-1.5">
+                                              <div className="flex items-center justify-between">
+                                                 <div className="flex items-center gap-2">
+                                                    <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] ${uploadMessageByModule[m._id]?.includes("Transcribing") ? "bg-blue-600 text-white animate-pulse" : (uploadStatusByModule[m._id] === "ready" ? "bg-emerald-500 text-white" : "bg-gray-800 text-gray-600")}`}>
+                                                       {uploadStatusByModule[m._id] === "ready" ? "✓" : "4"}
+                                                    </div>
+                                                    <span className={`text-[9px] font-bold ${uploadMessageByModule[m._id]?.includes("Transcribing") ? "text-white" : "text-gray-500"}`}>AI Transcription</span>
+                                                 </div>
+                                              </div>
+                                              <div className="h-1 w-full bg-gray-800 rounded-full overflow-hidden">
+                                                 <div className={`h-full transition-all duration-[6000ms] ease-out ${uploadMessageByModule[m._id]?.includes("Transcribing") ? "bg-blue-600 w-[90%] animate-pulse" : (uploadStatusByModule[m._id] === "ready" ? "bg-emerald-500 w-full" : "w-0")}`}></div>
+                                              </div>
+                                           </div>
+
+                                           {uploadStatusByModule[m._id] === "ready" && (
+                                              <div className="pt-2 flex items-center gap-2 text-emerald-500 bg-emerald-500/5 p-2 rounded-lg border border-emerald-500/10">
+                                                 <span className="text-sm">✓</span>
+                                                 <span className="text-[9px] font-black uppercase tracking-[0.2em]">Ready to save</span>
+                                              </div>
+                                           )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                               </div>
+                            </div>
+
+                            <div className="flex items-center justify-between pt-2">
+                               <div className="text-[9px] font-black text-gray-600 uppercase tracking-[0.2em]">{uploadMessageByModule[m._id] || "System Ready"}</div>
+                               <div className="flex gap-3">
+                                  {editingLectureId && <button type="button" onClick={() => { setEditingLectureId(null); setLectureForms(curr => ({ ...curr, [m._id]: emptyLectureForm })); }} className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Cancel</button>}
+                                  <button 
+                                    type="submit" 
+                                    disabled={isSubmitting || (uploadStatusByModule[m._id] && uploadStatusByModule[m._id] !== "ready" && uploadStatusByModule[m._id] !== "Error" && uploadStatusByModule[m._id] !== "Ready!")}
+                                    className="px-6 py-3 bg-blue-600 text-white text-[10px] font-black rounded-lg uppercase tracking-[0.2em] hover:bg-blue-700 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                                  >
+                                     {isSubmitting ? "Saving..." : "Save Lecture"}
+                                  </button>
+                               </div>
+                            </div>
+                         </form>
+                      </div>
                     ))}
-                    {modules.length === 0 && <p className="text-gray-400 italic text-sm">No modules created yet.</p>}
                  </div>
               </div>
 
-              <div className="bg-blue-600 rounded-[40px] p-8 text-white shadow-2xl shadow-blue-600/20">
-                 <h3 className="text-xl font-black mb-4">Add Module</h3>
-                 <form onSubmit={handleModuleSubmit} className="space-y-4">
-                    <input 
-                      className="w-full bg-blue-500/50 border-none rounded-2xl p-4 text-sm font-bold placeholder-blue-200 focus:ring-2 focus:ring-white" 
-                      placeholder="Module Title"
-                      value={moduleForm.title}
-                      onChange={e => setModuleForm({ ...moduleForm, title: e.target.value })}
-                    />
-                    <div className="flex gap-2">
-                       <input 
-                        type="number"
-                        className="w-20 bg-blue-500/50 border-none rounded-2xl p-4 text-sm font-bold focus:ring-2 focus:ring-white" 
-                        value={moduleForm.order}
-                        onChange={e => setModuleForm({ ...moduleForm, order: e.target.value })}
-                       />
-                       <button className="flex-1 bg-white text-blue-600 font-black rounded-2xl p-4 text-xs uppercase tracking-widest hover:bg-blue-50 transition-all">
-                          {editingModuleId ? "Update" : "Create"}
-                       </button>
-                    </div>
-                 </form>
-              </div>
-           </aside>
-
-           {/* Main Module Editor Area */}
-           <main className="xl:col-span-2 space-y-12">
-              {modules.sort((a, b) => a.order - b.order).map((m) => (
-                <section key={m._id} id={`module-${m._id}`} className="bg-white dark:bg-gray-900 rounded-[48px] border border-gray-100 dark:border-gray-800 shadow-2xl shadow-blue-600/5 overflow-hidden transition-all hover:border-blue-500/30">
-                   
-                   {/* Module Banner */}
-                   <div className="bg-gray-50 dark:bg-gray-800/50 p-8 lg:p-10 flex flex-wrap items-center justify-between gap-6">
-                      <div className="flex items-center gap-6">
-                         <div className="w-16 h-16 rounded-3xl bg-blue-600 flex items-center justify-center text-white text-2xl font-black">{m.order}</div>
-                         <div>
-                            <h2 className="text-2xl font-black text-gray-900 dark:text-white">{m.title}</h2>
-                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mt-1">Module Identity: {m._id.slice(-6)}</p>
+              <div className="space-y-4">
+                 <h2 className="text-lg font-black text-white uppercase tracking-tight">EXISTING LECTURES</h2>
+                 <div className="grid grid-cols-1 gap-4">
+                    {modules.map(m => (
+                      <div key={m._id} className="space-y-2">
+                         <div className="flex items-center gap-4">
+                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{m.title}</span>
+                            <div className="h-px flex-1 bg-gray-900" />
                          </div>
-                      </div>
-                      <div className="flex gap-2">
-                         <button onClick={() => startModuleEdit(m)} className="px-5 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-xs font-bold rounded-xl hover:text-blue-600">Edit</button>
-                         <button onClick={async () => { if(window.confirm('Delete module?')) { await API.delete(`/modules/${m._id}`); fetchCourseData(); } }} className="px-5 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-xs font-bold rounded-xl hover:text-red-500">Delete</button>
-                      </div>
-                   </div>
-
-                   <div className="p-8 lg:p-10 space-y-12">
-                      
-                      {/* Lectures Sub-list */}
-                      <div>
-                         <div className="flex items-center gap-4 mb-8">
-                            <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest">Lectures ({lecturesByModule[m._id]?.length || 0})</h4>
-                            <div className="h-px flex-1 bg-gray-50 dark:bg-gray-800" />
-                         </div>
-                         <div className="grid grid-cols-1 gap-4 mb-8">
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {lecturesByModule[m._id]?.map(l => (
-                              <div key={l._id} className="p-6 rounded-3xl bg-gray-50 dark:bg-gray-800/30 border border-gray-100 dark:border-gray-800 flex items-center justify-between group">
-                                 <div className="flex items-center gap-4">
-                                    <span className="text-2xl">📽️</span>
-                                    <div>
-                                       <p className="text-sm font-black text-gray-900 dark:text-white">{l.title}</p>
-                                       <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Order: {l.order} | {l.contents?.length || 0} Assets</p>
+                              <div key={l._id} className="bg-[#111827] border border-gray-800 p-6 rounded-2xl group hover:border-blue-500/30 transition-all">
+                                 <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-4">
+                                       <div className="w-10 h-10 rounded-xl bg-[#0B0F19] flex items-center justify-center text-lg">📽️</div>
+                                       <div>
+                                          <p className="text-sm font-bold text-white">{l.title}</p>
+                                          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">{l.contents?.length || 0} Assets</p>
+                                       </div>
+                                    </div>
+                                    <div className="flex gap-3">
+                                       <button onClick={() => { setEditingLectureId(l._id); setLectureForms(curr => ({ ...curr, [m._id]: hydrateLectureForm(l) })); window.scrollTo({top: 0, behavior: 'smooth'}); }} className="text-[10px] font-black text-blue-500 uppercase tracking-widest hover:text-blue-400">Edit</button>
+                                       <button onClick={async () => { if(window.confirm('Delete lecture?')) { await API.delete(`/lectures/${l._id}`); fetchCourseData(); } }} className="text-[10px] font-black text-red-500 uppercase tracking-widest hover:text-red-400">Delete</button>
                                     </div>
                                  </div>
-                                 <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button onClick={() => { setEditingLectureId(l._id); setLectureForms(curr => ({ ...curr, [m._id]: hydrateLectureForm(l) })); }} className="text-xs font-bold text-blue-600">Edit</button>
-                                    <button onClick={async () => { if(window.confirm('Delete lecture?')) { await API.delete(`/lectures/${l._id}`); fetchCourseData(); } }} className="text-xs font-bold text-red-500 ml-4">Delete</button>
+                                 
+                                 <div className="flex items-center justify-between pt-4 border-t border-gray-800/50">
+                                    <div className="flex gap-4">
+                                      <div className="flex items-center gap-1.5" title={l.aiSummary?.error}>
+                                        <div className={`w-1.5 h-1.5 rounded-full ${l.aiSummary?.status === 'ready' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : l.aiSummary?.status === 'processing' ? 'bg-blue-500 animate-pulse' : 'bg-gray-600'}`}></div>
+                                        <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Summary</span>
+                                      </div>
+                                      <div className="flex items-center gap-1.5" title={l.aiQuestionBank?.error}>
+                                        <div className={`w-1.5 h-1.5 rounded-full ${l.aiQuestionBank?.status === 'ready' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : l.aiQuestionBank?.status === 'processing' ? 'bg-blue-500 animate-pulse' : 'bg-gray-600'}`}></div>
+                                        <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Adaptive Quiz</span>
+                                      </div>
+                                    </div>
+                                    <button 
+                                      onClick={async () => {
+                                        try {
+                                          await API.post(`/lectures/single/${l._id}/ai-refresh`);
+                                          fetchCourseData();
+                                          setStatusMessage("AI generation restarted!");
+                                        } catch (err) {
+                                          setError("Failed to refresh AI");
+                                        }
+                                      }}
+                                      className="text-[9px] font-black text-blue-500 uppercase tracking-widest hover:text-blue-400 flex items-center gap-1"
+                                    >
+                                      <span>↺</span> Refresh AI
+                                    </button>
                                  </div>
                               </div>
                             ))}
-                            {(!lecturesByModule[m._id] || lecturesByModule[m._id].length === 0) && <p className="text-center py-8 text-gray-400 italic text-sm bg-gray-50/50 dark:bg-gray-800/10 rounded-3xl">No lectures added to this module yet.</p>}
-                         </div>
-
-                         {/* Add Lecture Form (Nested) */}
-                         <div className="bg-white dark:bg-gray-900 border border-blue-500/20 rounded-[40px] p-8 shadow-2xl shadow-blue-600/5">
-                            <h5 className="text-lg font-black text-gray-900 dark:text-white mb-6 flex items-center gap-3">
-                               <span className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">+</span>
-                               {editingLectureId ? "Edit Lecture" : "Add New Lecture"}
-                            </h5>
-                            <form onSubmit={e => handleLectureSubmit(e, m._id)} className="space-y-6">
-                               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                  <div className="md:col-span-3">
-                                     <input 
-                                      className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none text-sm font-bold placeholder-gray-400 focus:ring-2 focus:ring-blue-500" 
-                                      placeholder="Lecture Title"
-                                      value={lectureForms[m._id]?.title || ""}
-                                      onChange={e => updateLectureForm(m._id, 'title', e.target.value)}
-                                     />
-                                  </div>
-                                  <div className="md:col-span-1">
-                                     <input 
-                                      type="number"
-                                      className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none text-sm font-bold focus:ring-2 focus:ring-blue-500" 
-                                      placeholder="Order"
-                                      value={lectureForms[m._id]?.order || 1}
-                                      onChange={e => updateLectureForm(m._id, 'order', e.target.value)}
-                                     />
-                                  </div>
-                               </div>
-
-                               <textarea 
-                                className="w-full p-6 rounded-3xl bg-gray-50 dark:bg-gray-800 border-none text-sm text-gray-700 dark:text-gray-300 placeholder-gray-400 focus:ring-2 focus:ring-blue-500"
-                                placeholder="Text content (optional)"
-                                rows={3}
-                                value={lectureForms[m._id]?.textContent || ""}
-                                onChange={e => updateLectureForm(m._id, 'textContent', e.target.value)}
-                               />
-
-                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                  <div className="p-6 rounded-3xl bg-blue-50/30 dark:bg-blue-900/10 border border-blue-100/50 dark:border-blue-900/20">
-                                     <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-4">Video Asset (Recommended)</p>
-                                     <input 
-                                      type="file" accept="video/*" 
-                                      className="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-blue-600 file:text-white hover:file:bg-blue-700"
-                                      onChange={e => uploadLectureAsset(m._id, e.target.files[0], 'video')}
-                                     />
-                                     {lectureForms[m._id]?.videoUrl && <p className="mt-4 text-[10px] font-bold text-green-600 uppercase">✓ Video Attached ({formatFileSize(lectureForms[m._id].videoOriginalSize)})</p>}
-                                  </div>
-                                  <div className="p-6 rounded-3xl bg-purple-50/30 dark:bg-purple-900/10 border border-purple-100/50 dark:border-purple-900/20">
-                                     <p className="text-[10px] font-black text-purple-600 uppercase tracking-widest mb-4">Supplementary PDF</p>
-                                     <input 
-                                      type="file" accept=".pdf" 
-                                      className="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-purple-600 file:text-white hover:file:bg-purple-700"
-                                      onChange={e => uploadLectureAsset(m._id, e.target.files[0], 'pdf')}
-                                     />
-                                     {lectureForms[m._id]?.resourceUrl && <p className="mt-4 text-[10px] font-bold text-green-600 uppercase">✓ PDF Attached</p>}
-                                  </div>
-                               </div>
-
-                               <div className="flex items-center justify-between pt-4">
-                                  <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{uploadStatusByModule[m._id] || "All systems ready"}</div>
-                                  <div className="flex gap-3">
-                                     {editingLectureId && <button type="button" onClick={() => { setEditingLectureId(null); setLectureForms(curr => ({ ...curr, [m._id]: emptyLectureForm })); }} className="px-6 py-3 bg-gray-100 dark:bg-gray-800 text-gray-500 text-xs font-bold rounded-xl">Cancel</button>}
-                                     <button type="submit" className="px-10 py-3 bg-blue-600 text-white text-xs font-black rounded-xl uppercase tracking-widest shadow-xl shadow-blue-600/20 transition-all hover:scale-105">
-                                        {editingLectureId ? "Update Lecture" : "Save Lecture"}
-                                     </button>
-                                  </div>
-                               </div>
-                            </form>
                          </div>
                       </div>
-
-                      {/* Quizzes Sub-list */}
-                      <div>
-                         <div className="flex items-center gap-4 mb-8">
-                            <h4 className="text-xs font-black text-orange-600 uppercase tracking-widest">Assessments ({quizzesByModule[m._id]?.length || 0})</h4>
-                            <div className="h-px flex-1 bg-gray-50 dark:bg-gray-800" />
-                         </div>
-                         <div className="grid grid-cols-1 gap-4 mb-8">
-                            {quizzesByModule[m._id]?.map(q => (
-                              <div key={q._id} className="p-6 rounded-3xl bg-orange-50/20 dark:bg-orange-900/10 border border-orange-100/30 dark:border-orange-900/20 flex items-center justify-between group">
-                                 <div className="flex items-center gap-4">
-                                    <span className="text-2xl">📝</span>
-                                    <div>
-                                       <p className="text-sm font-black text-gray-900 dark:text-white">{q.title}</p>
-                                       <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">{q.questions?.length || 0} Questions | Passing: {q.passingScore}%</p>
-                                    </div>
-                                 </div>
-                                 <button onClick={async () => { if(window.confirm('Delete quiz?')) { await API.delete(`/quizzes/${q._id}`); fetchCourseData(); } }} className="text-xs font-bold text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">Delete</button>
-                              </div>
-                            ))}
-                            {(!quizzesByModule[m._id] || quizzesByModule[m._id].length === 0) && <p className="text-center py-8 text-gray-400 italic text-sm bg-orange-50/10 dark:bg-orange-900/5 rounded-3xl">No quizzes added yet.</p>}
-                         </div>
-                         <div className="text-center">
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">Quiz management is coming soon to the new builder UI.</p>
-                         </div>
-                      </div>
-
-                   </div>
-                </section>
-              ))}
-
-              {modules.length === 0 && (
-                <div className="py-20 text-center bg-gray-50 dark:bg-gray-900/50 rounded-[64px] border-2 border-dashed border-gray-200 dark:border-gray-800">
-                   <div className="text-6xl mb-6 opacity-20">🏗️</div>
-                   <h3 className="text-2xl font-black text-gray-400">Your course is empty</h3>
-                   <p className="text-gray-500 mt-2">Start by creating your first module using the blue card on the left.</p>
-                </div>
-              )}
+                    ))}
+                 </div>
+              </div>
            </main>
 
         </div>

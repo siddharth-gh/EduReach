@@ -42,89 +42,63 @@ const SidebarLayout = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-[#121212] font-sans overflow-hidden transition-colors duration-200">
+    <div className="flex h-screen bg-[#0B0F19] font-sans overflow-hidden">
       
-      {/* Mobile Sidebar Overlay */}
-      {isSidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden backdrop-blur-sm transition-opacity"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 transform bg-white dark:bg-[#1e1e1e] border-r border-gray-200 dark:border-gray-800 transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'}`}>
-        <div className="p-6 flex items-center justify-between lg:block">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <span className="text-blue-600 dark:text-blue-500">Edu</span>Platform
-            </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Teacher Portal</p>
-          </div>
-          <button className="lg:hidden text-gray-500" onClick={() => setIsSidebarOpen(false)}>✕</button>
+      {/* Slim Modern Sidebar */}
+      <aside className="w-16 bg-[#0B0F19] border-r border-gray-800 flex flex-col items-center py-6 gap-8 z-50">
+        {/* Logo */}
+        <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white text-lg font-black shadow-lg shadow-blue-600/30 cursor-pointer hover:scale-105 transition-all">
+          E
         </div>
 
-        <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto custom-scrollbar">
+        {/* Navigation */}
+        <nav className="flex-1 flex flex-col gap-4">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
             return (
               <Link
                 key={item.name}
                 to={item.path}
-                onClick={() => setIsSidebarOpen(false)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
+                className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg transition-all relative group ${
                   isActive
-                    ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
-                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                    ? "bg-blue-600 text-white shadow-xl shadow-blue-600/20"
+                    : "text-gray-600 hover:text-white hover:bg-gray-800"
                 }`}
               >
-                <span className="text-lg">{item.icon}</span>
-                {item.name}
+                <span>{item.icon}</span>
+                
+                {/* Tooltip */}
+                <div className="absolute left-14 px-2 py-1 bg-gray-900 text-white text-[9px] font-black uppercase tracking-widest rounded-md opacity-0 group-hover:opacity-100 pointer-events-none translate-x-2 group-hover:translate-x-0 transition-all shadow-2xl border border-gray-800 whitespace-nowrap z-[100]">
+                  {item.name}
+                </div>
+
+                {/* Active Indicator Line */}
+                {isActive && (
+                  <div className="absolute -left-3 w-1 h-5 bg-blue-600 rounded-r-full shadow-[0_0_15px_rgba(37,99,235,0.8)]"></div>
+                )}
               </Link>
             );
           })}
         </nav>
 
-        <div className="p-4 border-t border-gray-200 dark:border-gray-800">
-          <button
+        {/* Bottom Actions */}
+        <div className="flex flex-col gap-4 mt-auto">
+          <button 
             onClick={toggleTheme}
-            className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors mb-4"
+            className="w-10 h-10 rounded-xl border border-gray-800 flex items-center justify-center text-base text-gray-500 hover:text-white hover:bg-gray-800 transition-all"
           >
-            <span className="text-lg">{theme === "dark" ? "☀️" : "🌙"}</span>
-            {theme === "dark" ? "Light Mode" : "Dark Mode"}
+            {theme === "dark" ? "☀️" : "🌙"}
           </button>
-
-          <div className="flex items-center gap-3 px-2">
-            <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold shrink-0">
-              {user?.name?.charAt(0)?.toUpperCase() || "T"}
-            </div>
-            <div className="overflow-hidden">
-              <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{user?.name || "Teacher Name"}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user?.email || "teacher@edu.com"}</p>
-            </div>
+          
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-gray-800 to-gray-700 flex items-center justify-center text-white text-[10px] font-black border border-gray-700 cursor-pointer hover:border-blue-500 transition-all">
+            {user?.name?.charAt(0)?.toUpperCase() || "T"}
           </div>
         </div>
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto relative custom-scrollbar flex flex-col">
-        {/* Mobile Header */}
-        <header className="lg:hidden bg-white dark:bg-[#1e1e1e] border-b border-gray-200 dark:border-gray-800 p-4 flex items-center justify-between sticky top-0 z-30">
-          <button 
-            className="p-2 -ml-2 text-gray-600 dark:text-gray-400"
-            onClick={() => setIsSidebarOpen(true)}
-          >
-            ☰
-          </button>
-          <div className="text-lg font-bold text-gray-900 dark:text-white">
-            <span className="text-blue-600">Edu</span>Platform
-          </div>
-          <div className="w-8" /> {/* Spacer */}
-        </header>
-
-        <div className="flex-1">
-          {children}
-        </div>
+      <main className="flex-1 overflow-y-auto relative custom-scrollbar bg-[#0B0F19]">
+        {children}
       </main>
 
     </div>
