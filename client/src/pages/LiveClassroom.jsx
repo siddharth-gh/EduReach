@@ -37,11 +37,10 @@ const buildIceServers = () => {
   return servers;
 };
 
-const getSocketBaseUrl = () =>
-  (import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(
-    /\/api\/?$/,
-    ""
-  );
+const getSocketBaseUrl = () => {
+  const url = import.meta.env.VITE_API_URL || import.meta.env.VITE_APP_URL || "http://localhost:5000/api";
+  return url.replace(/\/api\/?$/, "");
+};
 
 const LiveClassroom = () => {
   const { courseId } = useParams();
