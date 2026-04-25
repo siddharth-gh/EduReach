@@ -69,7 +69,7 @@ const ChatView = () => {
   };
 
   return (
-    <div style={{ width: "300px", height: "100%", background: "#1a1a1a", borderLeft: "1px solid #333", display: "flex", flexDirection: "column" }}>
+    <div className="w-full md:w-[300px] h-[300px] md:h-full bg-[#1a1a1a] border-t md:border-t-0 md:border-l border-[#333] flex flex-col">
       <div style={{ padding: "16px", borderBottom: "1px solid #333", fontWeight: "bold", color: "#fff" }}>Class Chat</div>
       <div style={{ flex: 1, overflowY: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "8px" }}>
         {messages.map((msg) => (
@@ -86,9 +86,9 @@ const ChatView = () => {
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
           placeholder="Type a message..."
-          style={{ flex: 1, padding: "8px", borderRadius: "4px", border: "1px solid #444", background: "#222", color: "white" }}
+          className="flex-1 p-2 rounded bg-[#222] text-white border border-[#444] text-sm outline-none"
         />
-        <button className="btn btn-inline" style={{ padding: "8px 12px" }} onClick={handleSendMessage}>Send</button>
+        <button className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-2 rounded transition-all" onClick={handleSendMessage}>Send</button>
       </div>
     </div>
   );
@@ -99,7 +99,7 @@ const MeetingView = ({ onMeetingLeave, isTeacherHost }) => {
   const [micOn, setMicOn] = useState(true);
   const [webcamOn, setWebcamOn] = useState(true);
 
-  const { join, leave, toggleMic, toggleWebcam, participants } = useMeeting({
+  const { join, leave, end, toggleMic, toggleWebcam, participants } = useMeeting({
     onMeetingJoined: () => setJoined("JOINED"),
     onMeetingLeft: () => onMeetingLeave(),
   });
@@ -117,7 +117,7 @@ const MeetingView = ({ onMeetingLeave, isTeacherHost }) => {
   const participantsArr = [...participants.values()];
 
   return (
-    <div className="live-studio-container" style={{ display: "flex", flexDirection: "row", background: "#0a0a0a" }}>
+    <div className="live-studio-container flex flex-col md:flex-row bg-[#0a0a0a]">
       {joined === "JOINED" ? (
         <>
           <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
@@ -144,13 +144,7 @@ const MeetingView = ({ onMeetingLeave, isTeacherHost }) => {
             </div>
 
             {/* Floating Glassmorphism Toolbar */}
-            <div style={{
-              position: "absolute", bottom: "32px", left: "50%", transform: "translateX(-50%)",
-              background: "rgba(30, 30, 30, 0.75)", backdropFilter: "blur(16px)",
-              border: "1px solid rgba(255, 255, 255, 0.1)", borderRadius: "100px",
-              padding: "12px 24px", display: "flex", gap: "16px",
-              boxShadow: "0 12px 40px rgba(0,0,0,0.5)", alignItems: "center", zIndex: 10
-            }}>
+            <div className="absolute bottom-6 md:bottom-8 left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur-xl border border-white/10 rounded-full p-2 md:p-3 flex items-center gap-2 md:gap-4 shadow-2xl z-10">
               <button onClick={handleToggleMic} style={{
                 width: "48px", height: "48px", borderRadius: "50%", border: "none",
                 display: "flex", alignItems: "center", justifyContent: "center",
@@ -173,14 +167,15 @@ const MeetingView = ({ onMeetingLeave, isTeacherHost }) => {
 
               <div style={{ width: "1px", height: "24px", background: "rgba(255,255,255,0.2)" }}></div>
 
-              <button onClick={() => leave()} style={{
-                padding: "0 24px", height: "48px", borderRadius: "24px", border: "none",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "pointer", transition: "all 0.2s ease",
-                background: "#ef4444", color: "white", fontWeight: "600", fontSize: "15px"
-              }}>
-                Leave Studio
+              <button onClick={() => leave()} className="px-4 md:px-6 h-10 md:h-12 rounded-full border-none flex items-center justify-center cursor-pointer transition-all bg-white/10 text-white font-bold text-xs md:text-sm">
+                Leave
               </button>
+
+              {isTeacherHost && (
+                <button onClick={() => end()} className="px-4 md:px-6 h-10 md:h-12 rounded-full border-none flex items-center justify-center cursor-pointer transition-all bg-red-600 text-white font-bold text-xs md:text-sm shadow-lg shadow-red-600/20">
+                  End Class
+                </button>
+              )}
             </div>
           </div>
           <ChatView />

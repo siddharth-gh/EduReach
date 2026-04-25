@@ -131,6 +131,19 @@ const CourseDetail = () => {
     }
   };
 
+  const handleStopLive = async () => {
+    if (!window.confirm("Are you sure you want to stop this live session for everyone?")) return;
+    try {
+      await API.post(`/courses/${courseId}/live/stop`);
+      setCourse(curr => ({
+        ...curr,
+        liveSession: { ...curr.liveSession, isActive: false }
+      }));
+    } catch (err) {
+      setError("Failed to stop live session: " + (err.response?.data?.message || err.message));
+    }
+  };
+
   if (error) return (
     <AppShell>
       <div className="max-w-3xl mx-auto px-4 py-20 text-center">
@@ -201,6 +214,14 @@ const CourseDetail = () => {
                       >
                         {course.liveSession?.isActive ? "Resume Live Room" : t("courseDetail.goLive")}
                       </button>
+                      {course.liveSession?.isActive && (
+                        <button 
+                          onClick={handleStopLive}
+                          className="px-8 py-4 bg-white dark:bg-gray-900 text-red-600 font-bold rounded-2xl border border-red-200 dark:border-red-900/50 hover:bg-red-50 transition-all shadow-xl shadow-red-500/5"
+                        >
+                          Stop Live Session
+                        </button>
+                      )}
                    </>
                  ) : (
                    <>

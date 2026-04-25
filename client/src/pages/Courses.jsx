@@ -108,12 +108,7 @@ const Courses = () => {
                   {courses.map((course) => (
                     <CourseCard
                       key={course._id}
-                      title={course.title}
-                      description={course.description}
-                      teacherName={course.teacherId?.name}
-                      category={course.category}
-                      level={course.level}
-                      downloaded={isCourseDownloaded(course._id)}
+                      course={{ ...course, downloaded: isCourseDownloaded(course._id) }}
                       onClick={() => navigate(`/course/${course._id}`)}
                     />
                   ))}

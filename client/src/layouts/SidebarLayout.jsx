@@ -39,16 +39,29 @@ const SidebarLayout = ({ children }) => {
   // In the Figma, "Courses" is highlighted as active. I'll just match exact paths.
   // Note: we're replacing the dashboard page, so /teacher/dashboard is the active one for this task.
 
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-[#121212] font-sans overflow-hidden transition-colors duration-200">
       
+      {/* Mobile Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden backdrop-blur-sm transition-opacity"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-64 flex flex-col bg-white dark:bg-[#1e1e1e] border-r border-gray-200 dark:border-gray-800 transition-colors duration-200">
-        <div className="p-6">
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <span className="text-blue-600 dark:text-blue-500">Edu</span>Platform
-          </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Teacher Portal</p>
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 transform bg-white dark:bg-[#1e1e1e] border-r border-gray-200 dark:border-gray-800 transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'}`}>
+        <div className="p-6 flex items-center justify-between lg:block">
+          <div>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <span className="text-blue-600 dark:text-blue-500">Edu</span>Platform
+            </h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Teacher Portal</p>
+          </div>
+          <button className="lg:hidden text-gray-500" onClick={() => setIsSidebarOpen(false)}>✕</button>
         </div>
 
         <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto custom-scrollbar">
@@ -58,6 +71,7 @@ const SidebarLayout = ({ children }) => {
               <Link
                 key={item.name}
                 to={item.path}
+                onClick={() => setIsSidebarOpen(false)}
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
                   isActive
                     ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
@@ -93,8 +107,24 @@ const SidebarLayout = ({ children }) => {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto relative custom-scrollbar">
-        {children}
+      <main className="flex-1 overflow-y-auto relative custom-scrollbar flex flex-col">
+        {/* Mobile Header */}
+        <header className="lg:hidden bg-white dark:bg-[#1e1e1e] border-b border-gray-200 dark:border-gray-800 p-4 flex items-center justify-between sticky top-0 z-30">
+          <button 
+            className="p-2 -ml-2 text-gray-600 dark:text-gray-400"
+            onClick={() => setIsSidebarOpen(true)}
+          >
+            ☰
+          </button>
+          <div className="text-lg font-bold text-gray-900 dark:text-white">
+            <span className="text-blue-600">Edu</span>Platform
+          </div>
+          <div className="w-8" /> {/* Spacer */}
+        </header>
+
+        <div className="flex-1">
+          {children}
+        </div>
       </main>
 
     </div>

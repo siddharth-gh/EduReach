@@ -4,7 +4,7 @@ import { useAuth } from "../app/useAuth";
 
 const MobileNav = () => {
   const { t } = useTranslation();
-  const { isAuthenticated, getHomeRouteForRole, user } = useAuth();
+  const { isAuthenticated, getHomeRouteForRole, user, logout } = useAuth();
 
   const navItems = [
     { label: t("nav.home"), path: "/", icon: "🏠" },
@@ -25,6 +25,15 @@ const MobileNav = () => {
           <span className="text-[10px] font-bold uppercase tracking-wider">{item.label}</span>
         </NavLink>
       ))}
+      {isAuthenticated && (
+        <button
+          onClick={() => { if(window.confirm('Logout?')) logout(); }}
+          className="flex flex-col items-center gap-1 text-gray-400 dark:text-gray-500"
+        >
+          <span className="text-xl">🚪</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider">{t("nav.logout")}</span>
+        </button>
+      )}
     </nav>
   );
 };

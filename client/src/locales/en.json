@@ -145,7 +145,8 @@
     "joinLive": "Join Live Class",
     "loadingItems": "Loading lessons and quizzes...",
     "noLectures": "No lectures added yet.",
-    "quizPrefix": "Quiz"
+    "quizPrefix": "Quiz",
+    "stopLiveSession": "Stop Live Session"
   },
   "dashboard": {
     "title": "Student Dashboard",

@@ -120,6 +120,7 @@ const AppShell = ({ children }) => {
       ) : null}
       <Navbar theme={theme} onToggleTheme={toggleTheme} />
       <main className="shell-content">{children}</main>
+      <MobileNav />
     </div>
   );
 };
