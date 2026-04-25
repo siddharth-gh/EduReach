@@ -142,6 +142,26 @@ const validateResourceList = (resources, errors) => {
                 errors,
                 { allowEmpty: true }
             ) ?? "";
+        const originalSize =
+            validateOptionalNumber(
+                resource.originalSize,
+                `resources[${index}].originalSize`,
+                errors,
+                { min: 0 }
+            ) ?? 0;
+        const optimizedSize =
+            validateOptionalNumber(
+                resource.optimizedSize,
+                `resources[${index}].optimizedSize`,
+                errors,
+                { min: 0 }
+            ) ?? 0;
+        const isOptimized =
+            validateOptionalBoolean(
+                resource.isOptimized,
+                `resources[${index}].isOptimized`,
+                errors
+            ) ?? false;
 
         if (!["pdf", "text", "file"].includes(type)) {
             errors.push(`resources[${index}].type must be pdf, text, or file`);
@@ -154,6 +174,9 @@ const validateResourceList = (resources, errors) => {
                   type,
                   originalFilename,
                   extractedText,
+                  originalSize,
+                  optimizedSize,
+                  isOptimized,
               }
             : null;
     });
@@ -269,6 +292,12 @@ const validateLectureContents = (contents, errors) => {
                 `contents[${index}].isLowBandwidthOptimized`,
                 errors
             ) ?? false;
+        const isOptimized =
+            validateOptionalBoolean(
+                content.isOptimized,
+                `contents[${index}].isOptimized`,
+                errors
+            ) ?? false;
 
         if (type === "text" && !data) {
             errors.push(`contents[${index}].data is required for text content`);
@@ -295,10 +324,39 @@ const validateLectureContents = (contents, errors) => {
             originalSize: type === "video" ? originalSize : undefined,
             optimizedSize: type === "video" ? optimizedSize : undefined,
             audioOnlySize: type === "video" ? audioOnlySize : undefined,
+            isOptimized: type === "image" ? isOptimized : undefined,
             isLowBandwidthOptimized:
                 type === "video" ? isLowBandwidthOptimized : undefined,
         };
     });
+};
+
+const validateLectureTranscript = (transcript, errors) => {
+    if (transcript === undefined) {
+        return undefined;
+    }
+
+    if (!isObject(transcript)) {
+        errors.push("transcript must be an object");
+        return undefined;
+    }
+
+    const text =
+        validateOptionalString(transcript.text, "transcript.text", errors, {
+            allowEmpty: true,
+        }) ?? "";
+    const source =
+        validateOptionalString(transcript.source, "transcript.source", errors, {
+            allowEmpty: true,
+        }) ?? "manual";
+
+    return {
+        status: text ? "ready" : "idle",
+        text,
+        source: text ? source || "manual" : "",
+        generatedAt: text ? new Date() : null,
+        error: "",
+    };
 };
 
 const validateQuizQuestions = (questions, errors) => {
@@ -604,6 +662,14 @@ export const validateLectureCreate = (req) => {
     });
     const contents = validateLectureContents(body.contents, errors) ?? [];
     const resources = validateResourceList(body.resources, errors) ?? [];
+    const transcript =
+        validateLectureTranscript(body.transcript, errors) ?? {
+            status: "idle",
+            text: "",
+            source: "",
+            generatedAt: null,
+            error: "",
+        };
 
     if (body.order === undefined) {
         errors.push("order is required");
@@ -618,6 +684,7 @@ export const validateLectureCreate = (req) => {
                 order,
                 contents,
                 resources,
+                transcript,
             },
         },
     };
@@ -633,13 +700,15 @@ export const validateLectureUpdate = (req) => {
     });
     const contents = validateLectureContents(body.contents, errors);
     const resources = validateResourceList(body.resources, errors);
+    const transcript = validateLectureTranscript(body.transcript, errors);
 
     pushError(
         errors,
         title === undefined &&
             order === undefined &&
             contents === undefined &&
-            resources === undefined,
+            resources === undefined &&
+            transcript === undefined,
         "At least one lecture field must be provided"
     );
 
@@ -651,6 +720,7 @@ export const validateLectureUpdate = (req) => {
                 ...(order !== undefined ? { order } : {}),
                 ...(contents !== undefined ? { contents } : {}),
                 ...(resources !== undefined ? { resources } : {}),
+                ...(transcript !== undefined ? { transcript } : {}),
             },
         },
     };

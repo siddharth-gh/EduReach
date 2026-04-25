@@ -40,6 +40,16 @@ const quizSchema = new mongoose.Schema(
             ref: "Module",
             required: true,
         },
+        sourceLectureId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Lecture",
+            default: null,
+        },
+        generatedBy: {
+            type: String,
+            enum: ["manual", "ai"],
+            default: "manual",
+        },
         title: {
             type: String,
             required: true,

@@ -16,6 +16,21 @@ const contentSchema = new mongoose.Schema(
             type: String, // for image URL
         },
 
+        originalSize: {
+            type: Number,
+            default: 0,
+        },
+
+        optimizedSize: {
+            type: Number,
+            default: 0,
+        },
+
+        isOptimized: {
+            type: Boolean,
+            default: false,
+        },
+
         optimizedUrl: {
             type: String,
             trim: true,
@@ -73,6 +88,56 @@ const contentSchema = new mongoose.Schema(
     { _id: false }
 );
 
+const adaptiveQuestionSchema = new mongoose.Schema(
+    {
+        question: {
+            type: String,
+            required: true,
+            trim: true,
+        },
+        options: {
+            type: [String],
+            default: [],
+            validate: {
+                validator: (options) => options.length === 4,
+                message: "Adaptive question must contain exactly 4 options",
+            },
+        },
+        correctAnswer: {
+            type: Number,
+            required: true,
+            min: 0,
+            max: 3,
+        },
+        explanation: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+        difficulty: {
+            type: String,
+            enum: ["easy", "medium", "hard"],
+            default: "medium",
+        },
+        concept: {
+            type: String,
+            trim: true,
+            default: "Core concept",
+        },
+        learningObjective: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+        remediationHint: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+    },
+    { timestamps: false }
+);
+
 const lectureSchema = new mongoose.Schema(
     {
         moduleId: {
@@ -121,6 +186,18 @@ const lectureSchema = new mongoose.Schema(
                     trim: true,
                     default: "",
                 },
+                originalSize: {
+                    type: Number,
+                    default: 0,
+                },
+                optimizedSize: {
+                    type: Number,
+                    default: 0,
+                },
+                isOptimized: {
+                    type: Boolean,
+                    default: false,
+                },
             },
         ],
 
@@ -137,6 +214,27 @@ const lectureSchema = new mongoose.Schema(
             },
             keyPoints: {
                 type: [String],
+                default: [],
+            },
+            generatedAt: {
+                type: Date,
+                default: null,
+            },
+            error: {
+                type: String,
+                trim: true,
+                default: "",
+            },
+        },
+
+        aiQuestionBank: {
+            status: {
+                type: String,
+                enum: ["idle", "processing", "ready", "failed"],
+                default: "idle",
+            },
+            questions: {
+                type: [adaptiveQuestionSchema],
                 default: [],
             },
             generatedAt: {

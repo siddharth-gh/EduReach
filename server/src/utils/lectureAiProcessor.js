@@ -1,8 +1,9 @@
 import Course from "../models/course.model.js";
 import Lecture from "../models/lecture.model.js";
 import Module from "../models/module.model.js";
+import Quiz from "../models/quiz.model.js";
 import {
-    generateLectureMcqSet,
+    generateAdaptiveQuestionBank,
     generateLectureSummary,
     isAiConfigured,
 } from "../services/ai.service.js";
@@ -32,8 +33,8 @@ const markLectureFailed = async (lectureId, errorMessage) => {
         $set: {
             "aiSummary.status": "failed",
             "aiSummary.error": errorMessage,
-            "aiMcqs.status": "failed",
-            "aiMcqs.error": errorMessage,
+            "aiQuestionBank.status": "failed",
+            "aiQuestionBank.error": errorMessage,
         },
     });
 };
@@ -50,10 +51,14 @@ export const queueLectureAiProcessing = async (lectureId) => {
             $set: {
                 "aiSummary.status": "processing",
                 "aiSummary.error": "",
-                "aiMcqs.status": "processing",
+                "aiQuestionBank.status": "processing",
+                "aiQuestionBank.error": "",
+                "aiMcqs.status": "idle",
+                "aiMcqs.questions": [],
                 "aiMcqs.error": "",
             },
         });
+        await Quiz.deleteMany({ sourceLectureId: lectureId, generatedBy: "ai" });
 
         const lecture = await Lecture.findById(lectureId).lean();
 
@@ -78,9 +83,9 @@ export const queueLectureAiProcessing = async (lectureId) => {
                     "aiSummary.status": "failed",
                     "aiSummary.error":
                         "Add lecture text first before generating the AI summary.",
-                    "aiMcqs.status": "failed",
-                    "aiMcqs.error":
-                        "Add lecture text first before generating AI MCQs.",
+                    "aiQuestionBank.status": "failed",
+                    "aiQuestionBank.error":
+                        "Add lecture text or a transcript first before generating adaptive practice.",
                 },
             });
             return;
@@ -101,27 +106,71 @@ export const queueLectureAiProcessing = async (lectureId) => {
                 "aiSummary.keyPoints": keyPoints,
                 "aiSummary.generatedAt": new Date(),
                 "aiSummary.error": "",
-                "aiMcqs.status": "processing",
-                "aiMcqs.error": "",
+                "aiQuestionBank.status": "processing",
+                "aiQuestionBank.error": "",
             },
         });
 
-        const generatedMcqs = await generateLectureMcqSet({
+        const easyQ = await generateAdaptiveQuestionBank({
             courseTitle: course?.title || "Untitled course",
             moduleTitle: module?.title || "Untitled module",
             lectureTitle: lecture.title,
             lectureText: lectureCourseText,
             transcriptText,
+            difficulty: "easy",
+            count: 5,
         });
+
+        const mediumQ = await generateAdaptiveQuestionBank({
+            courseTitle: course?.title || "Untitled course",
+            moduleTitle: module?.title || "Untitled module",
+            lectureTitle: lecture.title,
+            lectureText: lectureCourseText,
+            transcriptText,
+            difficulty: "medium",
+            count: 5,
+        });
+
+        const hardQ = await generateAdaptiveQuestionBank({
+            courseTitle: course?.title || "Untitled course",
+            moduleTitle: module?.title || "Untitled module",
+            lectureTitle: lecture.title,
+            lectureText: lectureCourseText,
+            transcriptText,
+            difficulty: "hard",
+            count: 5,
+        });
+
+        const questionBank = [...easyQ, ...mediumQ, ...hardQ];
 
         await Lecture.findByIdAndUpdate(lectureId, {
             $set: {
-                "aiMcqs.status": "ready",
-                "aiMcqs.questions": generatedMcqs,
-                "aiMcqs.generatedAt": new Date(),
-                "aiMcqs.error": "",
+                "aiQuestionBank.status": "ready",
+                "aiQuestionBank.questions": questionBank,
+                "aiQuestionBank.generatedAt": new Date(),
+                "aiQuestionBank.error": "",
             },
         });
+
+        // Create a formal Quiz document for the lecture
+        if (questionBank.length > 0) {
+            await Quiz.create({
+                courseId: course._id,
+                moduleId: module._id,
+                sourceLectureId: lectureId,
+                generatedBy: "ai",
+                title: `${lecture.title} - AI Practice Quiz`,
+                description: `Adaptive practice based on the lecture: ${lecture.title}`,
+                questions: questionBank.map(q => ({
+                    questionText: q.question,
+                    options: q.options,
+                    correctAnswer: q.correctAnswer,
+                    explanation: q.explanation
+                })),
+                passingScore: 60,
+                isPublished: true
+            });
+        }
     } catch (error) {
         await markLectureFailed(
             lectureId,

@@ -1,16 +1,20 @@
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import API from "../api/api";
-import AppShell from "../layouts/AppShell";
+import SidebarLayout from "../layouts/SidebarLayout";
 
 const emptyModuleForm = { title: "", order: 1 };
 const emptyLectureForm = {
   title: "",
   order: 1,
+  mediaType: "none",
   textContent: "",
   imageUrl: "",
   imagePublicLabel: "",
   imageFileName: "",
+  imageOriginalSize: 0,
+  imageOptimizedSize: 0,
+  imageIsOptimized: false,
   videoUrl: "",
   videoOptimizedUrl: "",
   videoAudioOnlyUrl: "",
@@ -24,12 +28,17 @@ const emptyLectureForm = {
   videoOptimizedSize: 0,
   videoAudioOnlySize: 0,
   videoLowBandwidthOptimized: false,
+  transcriptText: "",
+  transcriptSource: "",
   resourceTitle: "",
   resourceUrl: "",
-  resourceType: "file",
+  resourceType: "pdf",
   resourcePublicLabel: "",
   resourceFileName: "",
   resourceExtractedText: "",
+  resourceOriginalSize: 0,
+  resourceOptimizedSize: 0,
+  resourceIsOptimized: false,
 };
 const emptyQuizForm = {
   title: "",
@@ -49,30 +58,21 @@ const emptyQuizForm = {
   ],
 };
 
-const VIDEO_UPLOAD_LIMIT_BYTES = 1024 * 1024 * 1024;
-
 const formatFileSize = (bytes) => {
-  if (!bytes) {
-    return "0 B";
-  }
-
+  if (!bytes) return "0 B";
   const units = ["B", "KB", "MB", "GB"];
   let value = bytes;
   let index = 0;
-
   while (value >= 1024 && index < units.length - 1) {
     value /= 1024;
     index += 1;
   }
-
   return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
 };
 
-const clampProgress = (value) =>
-  Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
-
 const TeacherCourseBuilder = () => {
   const { courseId } = useParams();
+  const navigate = useNavigate();
   const [course, setCourse] = useState(null);
   const [modules, setModules] = useState([]);
   const [lecturesByModule, setLecturesByModule] = useState({});
@@ -98,69 +98,16 @@ const TeacherCourseBuilder = () => {
     }
   };
 
-  const setModuleProgress = (moduleId, nextProgress) => {
-    setUploadProgressByModule((current) => ({
-      ...current,
-      [moduleId]: {
-        ...current[moduleId],
-        ...nextProgress,
-      },
-    }));
-  };
-
   const buildLecturePayload = (form, moduleId) => {
     const contents = [];
-
-    if (form.textContent.trim()) {
-      contents.push({
-        type: "text",
-        data: form.textContent.trim(),
-        order: 1,
-      });
-    }
-
-    if (form.imageUrl.trim()) {
-      contents.push({
-        type: "image",
-        url: form.imageUrl.trim(),
-        order: contents.length + 1,
-      });
-    }
-
-    if (form.videoUrl.trim()) {
-      contents.push({
-        type: "video",
-        url: form.videoUrl.trim(),
-        optimizedUrl: form.videoOptimizedUrl.trim(),
-        audioOnlyUrl: form.videoAudioOnlyUrl.trim(),
-        thumbnailUrl: form.videoThumbnailUrl.trim(),
-        codec: form.videoCodec || "",
-        duration: Number(form.videoDuration) || 0,
-        originalSize: Number(form.videoOriginalSize) || 0,
-        optimizedSize: Number(form.videoOptimizedSize) || 0,
-        audioOnlySize: Number(form.videoAudioOnlySize) || 0,
-        isLowBandwidthOptimized: Boolean(form.videoLowBandwidthOptimized),
-        order: contents.length + 1,
-      });
-    }
-
+    const mediaType = form.mediaType || "none";
+    if (form.textContent.trim()) contents.push({ type: "text", data: form.textContent.trim(), order: 1 });
+    if (mediaType === "image" && form.imageUrl.trim()) contents.push({ type: "image", url: form.imageUrl.trim(), originalSize: Number(form.imageOriginalSize) || 0, optimizedSize: Number(form.imageOptimizedSize) || 0, isOptimized: Boolean(form.imageIsOptimized), order: contents.length + 1 });
+    if (mediaType === "video" && form.videoUrl.trim()) contents.push({ type: "video", url: form.videoUrl.trim(), optimizedUrl: form.videoOptimizedUrl.trim(), audioOnlyUrl: form.videoAudioOnlyUrl.trim(), thumbnailUrl: form.videoThumbnailUrl.trim(), codec: form.videoCodec || "", duration: Number(form.videoDuration) || 0, originalSize: Number(form.videoOriginalSize) || 0, optimizedSize: Number(form.videoOptimizedSize) || 0, audioOnlySize: Number(form.videoAudioOnlySize) || 0, isLowBandwidthOptimized: Boolean(form.videoLowBandwidthOptimized), order: contents.length + 1 });
     return {
-      moduleId,
-      title: form.title,
-      order: Number(form.order),
-      contents,
-      resources:
-        form.resourceTitle.trim() && form.resourceUrl.trim()
-          ? [
-              {
-                title: form.resourceTitle.trim(),
-                url: form.resourceUrl.trim(),
-                type: form.resourceType || "file",
-                originalFilename: form.resourceFileName || "",
-                extractedText: form.resourceExtractedText || "",
-              },
-            ]
-          : [],
+      moduleId, title: form.title, order: Number(form.order), contents,
+      transcript: { text: mediaType === "video" ? form.transcriptText.trim() : "", source: (mediaType === "video" && form.transcriptText.trim()) ? form.transcriptSource || "manual" : "" },
+      resources: (mediaType === "pdf" && form.resourceTitle.trim() && form.resourceUrl.trim()) ? [{ title: form.resourceTitle.trim(), url: form.resourceUrl.trim(), type: form.resourceType || "pdf", originalFilename: form.resourceFileName || "", extractedText: form.resourceExtractedText || "", originalSize: Number(form.resourceOriginalSize) || 0, optimizedSize: Number(form.resourceOptimizedSize) || 0, isOptimized: Boolean(form.resourceIsOptimized) }] : []
     };
   };
 
@@ -168,1341 +115,319 @@ const TeacherCourseBuilder = () => {
     const textItem = lecture.contents?.find((item) => item.type === "text");
     const imageItem = lecture.contents?.find((item) => item.type === "image");
     const videoItem = lecture.contents?.find((item) => item.type === "video");
-
     return {
+      ...emptyLectureForm,
       title: lecture.title,
       order: lecture.order,
+      mediaType: imageItem ? "image" : videoItem ? "video" : lecture.resources?.[0] ? "pdf" : "none",
       textContent: textItem?.data || "",
       imageUrl: imageItem?.url || "",
-      imagePublicLabel: imageItem?.url ? "Image attached" : "",
-      imageFileName: "",
+      imageOriginalSize: imageItem?.originalSize || 0,
+      imageOptimizedSize: imageItem?.optimizedSize || 0,
+      imageIsOptimized: Boolean(imageItem?.isOptimized),
       videoUrl: videoItem?.url || "",
       videoOptimizedUrl: videoItem?.optimizedUrl || "",
       videoAudioOnlyUrl: videoItem?.audioOnlyUrl || "",
       videoThumbnailUrl: videoItem?.thumbnailUrl || "",
       videoPublicLabel: videoItem?.url ? "Video attached" : "",
-      videoFileName: "",
-      videoSelectedSize: videoItem?.originalSize || 0,
       videoCodec: videoItem?.codec || "",
       videoDuration: videoItem?.duration || 0,
       videoOriginalSize: videoItem?.originalSize || 0,
       videoOptimizedSize: videoItem?.optimizedSize || 0,
       videoAudioOnlySize: videoItem?.audioOnlySize || 0,
       videoLowBandwidthOptimized: Boolean(videoItem?.isLowBandwidthOptimized),
+      transcriptText: lecture.transcript?.text || "",
+      transcriptSource: lecture.transcript?.source || "",
       resourceTitle: lecture.resources?.[0]?.title || "",
       resourceUrl: lecture.resources?.[0]?.url || "",
-      resourceType: lecture.resources?.[0]?.type || "file",
-      resourcePublicLabel: lecture.resources?.[0]?.title || "",
-      resourceFileName: "",
+      resourceType: lecture.resources?.[0]?.type || "pdf",
       resourceExtractedText: lecture.resources?.[0]?.extractedText || "",
+      resourceOriginalSize: lecture.resources?.[0]?.originalSize || 0,
+      resourceOptimizedSize: lecture.resources?.[0]?.optimizedSize || 0,
+      resourceIsOptimized: Boolean(lecture.resources?.[0]?.isOptimized),
     };
   };
 
-  const getQuizForm = (moduleId) => quizForms[moduleId] || emptyQuizForm;
-
-  const updateQuizForm = (moduleId, field, value) => {
-    setQuizForms((current) => ({
-      ...current,
-      [moduleId]: {
-        ...getQuizForm(moduleId),
-        [field]: value,
-      },
-    }));
-  };
-
-  const updateQuizQuestion = (moduleId, questionIndex, field, value) => {
-    setQuizForms((current) => {
-      const currentForm = current[moduleId] || emptyQuizForm;
-
-      return {
-        ...current,
-        [moduleId]: {
-          ...currentForm,
-          questions: currentForm.questions.map((question, index) =>
-            index === questionIndex
-              ? {
-                  ...question,
-                  [field]: value,
-                }
-              : question
-          ),
-        },
-      };
-    });
-  };
-
-  const addQuizQuestion = (moduleId) => {
-    setQuizForms((current) => {
-      const currentForm = current[moduleId] || emptyQuizForm;
-
-      return {
-        ...current,
-        [moduleId]: {
-          ...currentForm,
-          questions: [
-            ...currentForm.questions,
-            {
-              questionText: "",
-              optionA: "",
-              optionB: "",
-              optionC: "",
-              optionD: "",
-              correctAnswer: 0,
-              explanation: "",
-            },
-          ],
-        },
-      };
-    });
-  };
-
-  const removeQuizQuestion = (moduleId, questionIndex) => {
-    setQuizForms((current) => {
-      const currentForm = current[moduleId] || emptyQuizForm;
-      const nextQuestions = currentForm.questions.filter(
-        (_, index) => index !== questionIndex
-      );
-
-      return {
-        ...current,
-        [moduleId]: {
-          ...currentForm,
-          questions:
-            nextQuestions.length > 0 ? nextQuestions : emptyQuizForm.questions,
-        },
-      };
-    });
-  };
-
-  const buildQuizPayload = (moduleId, form) => ({
-    moduleId,
-    title: form.title,
-    description: form.description,
-    passingScore: Number(form.passingScore),
-    timeLimitMinutes: Number(form.timeLimitMinutes),
-    questions: form.questions.map((question) => ({
-      questionText: question.questionText,
-      options: [
-        question.optionA,
-        question.optionB,
-        question.optionC,
-        question.optionD,
-      ],
-      correctAnswer: Number(question.correctAnswer),
-      explanation: question.explanation,
-    })),
-  });
-
-  const hydrateQuizForm = (quiz) => ({
-    title: quiz.title,
-    description: quiz.description || "",
-    passingScore: quiz.passingScore ?? 50,
-    timeLimitMinutes: quiz.timeLimitMinutes ?? 0,
-    questions:
-      quiz.questions?.map((question) => ({
-        questionText: question.questionText || "",
-        optionA: question.options?.[0] || "",
-        optionB: question.options?.[1] || "",
-        optionC: question.options?.[2] || "",
-        optionD: question.options?.[3] || "",
-        correctAnswer: question.correctAnswer ?? 0,
-        explanation: question.explanation || "",
-      })) || emptyQuizForm.questions,
-  });
-
   const fetchCourseData = async () => {
     setLoading(true);
-    setError("");
-
     try {
-      const [courseResponse, modulesResponse] = await Promise.all([
-        API.get(`/courses/${courseId}`),
-        API.get(`/modules/${courseId}`),
-      ]);
-
-      setCourse(courseResponse.data);
-      setModules(modulesResponse.data);
-
-      const lectureEntries = await Promise.all(
-        modulesResponse.data.map(async (moduleItem) => {
-          const lectureResponse = await API.get(`/lectures/${moduleItem._id}`);
-          return [moduleItem._id, lectureResponse.data];
-        })
-      );
-      const quizEntries = await Promise.all(
-        modulesResponse.data.map(async (moduleItem) => {
-          const quizResponse = await API.get(`/quizzes/module/${moduleItem._id}`);
-          return [moduleItem._id, quizResponse.data];
-        })
-      );
-
-      setLecturesByModule(Object.fromEntries(lectureEntries));
+      const [courseRes, modulesRes] = await Promise.all([API.get(`/courses/${courseId}`), API.get(`/modules/${courseId}`)]);
+      setCourse(courseRes.data);
+      setModules(modulesRes.data);
+      const lecEntries = await Promise.all(modulesRes.data.map(async (m) => [m._id, (await API.get(`/lectures/${m._id}`)).data]));
+      const quizEntries = await Promise.all(modulesRes.data.map(async (m) => [m._id, (await API.get(`/quizzes/module/${m._id}`)).data]));
+      setLecturesByModule(Object.fromEntries(lecEntries));
       setQuizzesByModule(Object.fromEntries(quizEntries));
-
       const flattenedQuizzes = quizEntries.flatMap(([, items]) => items);
-      const attemptEntries = await Promise.all(
-        flattenedQuizzes.map(async (quiz) => {
-          const attemptResponse = await API.get(`/quiz-attempts/quiz/${quiz._id}`);
-          return [quiz._id, attemptResponse.data];
-        })
-      );
-
+      const attemptEntries = await Promise.all(flattenedQuizzes.map(async (q) => [q._id, (await API.get(`/quiz-attempts/quiz/${q._id}`)).data]));
       setAttemptsByQuiz(Object.fromEntries(attemptEntries));
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to load course builder");
-    } finally {
-      setLoading(false);
-    }
+    } catch { setError("Failed to load course builder"); }
+    finally { setLoading(false); }
   };
 
-  useEffect(() => {
-    fetchCourseData();
-    // The builder reloads when the selected course changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [courseId]);
+  useEffect(() => { fetchCourseData(); }, [courseId]);
 
-  useEffect(
-    () => () => {
-      Object.keys(videoPollingRefs.current).forEach((moduleId) => {
-        stopVideoPolling(moduleId);
-      });
-    },
-    []
-  );
-
-  const handleModuleSubmit = async (event) => {
-    event.preventDefault();
-    setError("");
-    setStatusMessage("");
-
+  const handleModuleSubmit = async (e) => {
+    e.preventDefault();
     try {
-      if (editingModuleId) {
-        await API.put(`/modules/${editingModuleId}`, {
-          title: moduleForm.title,
-          order: Number(moduleForm.order),
-        });
-        setStatusMessage("Module updated successfully.");
-      } else {
-        await API.post("/modules", {
-          courseId,
-          title: moduleForm.title,
-          order: Number(moduleForm.order),
-        });
-        setStatusMessage("Module created successfully.");
-      }
-
+      if (editingModuleId) await API.put(`/modules/${editingModuleId}`, moduleForm);
+      else await API.post("/modules", { ...moduleForm, courseId });
       setModuleForm(emptyModuleForm);
       setEditingModuleId(null);
       await fetchCourseData();
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to save module");
-    }
-  };
-
-  const startModuleEdit = (moduleItem) => {
-    setEditingModuleId(moduleItem._id);
-    setModuleForm({
-      title: moduleItem.title,
-      order: moduleItem.order,
-    });
-  };
-
-  const deleteModule = async (moduleId) => {
-    setError("");
-    setStatusMessage("");
-
-    try {
-      await API.delete(`/modules/${moduleId}`);
-      setStatusMessage("Module deleted successfully.");
-      await fetchCourseData();
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to delete module");
-    }
-  };
-
-  const getLectureForm = (moduleId) =>
-    lectureForms[moduleId] || emptyLectureForm;
-
-  const updateLectureForm = (moduleId, field, value) => {
-    setLectureForms((current) => ({
-      ...current,
-      [moduleId]: {
-        ...getLectureForm(moduleId),
-        [field]: value,
-      },
-    }));
-  };
-
-  const applyVideoUploadResult = (moduleId, payload, fallbackFile) => {
-    setLectureForms((current) => ({
-      ...current,
-      [moduleId]: {
-        ...getLectureForm(moduleId),
-        videoUrl: payload?.url || "",
-        videoOptimizedUrl: payload?.optimizedUrl || "",
-        videoAudioOnlyUrl: payload?.audioOnlyUrl || "",
-        videoThumbnailUrl: payload?.thumbnailUrl || "",
-        videoPublicLabel:
-          payload?.originalFilename || fallbackFile?.name || "Video attached",
-        videoFileName: fallbackFile?.name || payload?.originalFilename || "",
-        videoSelectedSize: fallbackFile?.size || payload?.bytes || 0,
-        videoCodec: payload?.codec || "",
-        videoDuration: payload?.duration || 0,
-        videoOriginalSize: payload?.bytes || fallbackFile?.size || 0,
-        videoOptimizedSize: payload?.optimizedBytes || 0,
-        videoAudioOnlySize: payload?.audioOnlyBytes || 0,
-        videoLowBandwidthOptimized: Boolean(
-          payload?.isLowBandwidthOptimized
-        ),
-      },
-    }));
-  };
-
-  const beginVideoStatusPolling = (moduleId, jobId, file) => {
-    stopVideoPolling(moduleId);
-
-    videoPollingRefs.current[moduleId] = window.setInterval(async () => {
-      try {
-        const response = await API.get(`/uploads/video/status/${jobId}`);
-        const job = response.data;
-
-        setUploadStatusByModule((current) => ({
-          ...current,
-          [moduleId]:
-            job.message || "Processing adaptive media for this lecture...",
-        }));
-        setModuleProgress(moduleId, {
-          active: job.status === "processing",
-          phase: job.status,
-          percent: clampProgress(job.progress || 40),
-        });
-
-        if (job.status === "ready") {
-          stopVideoPolling(moduleId);
-          applyVideoUploadResult(moduleId, job.result, file);
-          setStatusMessage("Video uploaded and optimized successfully.");
-          setUploadStatusByModule((current) => ({
-            ...current,
-            [moduleId]: "Video ready to save with the lecture.",
-          }));
-          setModuleProgress(moduleId, {
-            active: false,
-            phase: "ready",
-            percent: 100,
-          });
-        }
-
-        if (job.status === "failed") {
-          stopVideoPolling(moduleId);
-          applyVideoUploadResult(moduleId, job.result, file);
-          setError(job.error || "Video optimization failed");
-          setUploadStatusByModule((current) => ({
-            ...current,
-            [moduleId]:
-              job.message ||
-              "Original video uploaded, but optimization failed.",
-          }));
-          setModuleProgress(moduleId, {
-            active: false,
-            phase: "failed",
-            percent: 100,
-          });
-        }
-      } catch (err) {
-        stopVideoPolling(moduleId);
-        setError(
-          err.response?.data?.message || "Failed to track video processing"
-        );
-        setUploadStatusByModule((current) => ({
-          ...current,
-          [moduleId]: "Video processing status could not be refreshed.",
-        }));
-        setModuleProgress(moduleId, {
-          active: false,
-          phase: "failed",
-          percent: 100,
-        });
-      }
-    }, 2000);
-  };
-
-  const clearLectureAsset = (moduleId, type) => {
-    const currentForm = getLectureForm(moduleId);
-
-    if (type === "image") {
-      setLectureForms((current) => ({
-        ...current,
-        [moduleId]: {
-          ...currentForm,
-          imageUrl: "",
-          imagePublicLabel: "",
-          imageFileName: "",
-        },
-      }));
-      return;
-    }
-
-    if (type === "video") {
-      stopVideoPolling(moduleId);
-      setLectureForms((current) => ({
-        ...current,
-        [moduleId]: {
-          ...currentForm,
-          videoUrl: "",
-          videoOptimizedUrl: "",
-          videoAudioOnlyUrl: "",
-          videoThumbnailUrl: "",
-          videoPublicLabel: "",
-          videoFileName: "",
-          videoSelectedSize: 0,
-          videoCodec: "",
-          videoDuration: 0,
-          videoOriginalSize: 0,
-          videoOptimizedSize: 0,
-          videoAudioOnlySize: 0,
-          videoLowBandwidthOptimized: false,
-        },
-      }));
-      setUploadStatusByModule((current) => ({
-        ...current,
-        [moduleId]: "",
-      }));
-      setModuleProgress(moduleId, {
-        active: false,
-        phase: "idle",
-        percent: 0,
-      });
-      return;
-    }
-
-    setLectureForms((current) => ({
-      ...current,
-      [moduleId]: {
-        ...currentForm,
-        resourceTitle: "",
-        resourceUrl: "",
-        resourceType: "file",
-        resourcePublicLabel: "",
-        resourceFileName: "",
-        resourceExtractedText: "",
-      },
-    }));
+    } catch { setError("Failed to save module"); }
   };
 
   const uploadLectureAsset = async (moduleId, file, type) => {
-    if (!file) {
-      return;
-    }
-
-    if (type === "video") {
-      stopVideoPolling(moduleId);
-    }
-
+    if (!file) return;
     const formData = new FormData();
     formData.append("file", file);
-    if (type === "video") {
-      setLectureForms((current) => ({
-        ...current,
-        [moduleId]: {
-          ...getLectureForm(moduleId),
-          videoPublicLabel: file.name,
-          videoFileName: file.name,
-          videoSelectedSize: file.size,
-        },
-      }));
-      setModuleProgress(moduleId, {
-        active: true,
-        phase: "uploading",
-        percent: 0,
-      });
-    }
-
-    setUploadStatusByModule((current) => ({
-      ...current,
-      [moduleId]: "Uploading file...",
-    }));
-    setError("");
-    setStatusMessage("");
-
+    setUploadStatusByModule(curr => ({ ...curr, [moduleId]: "Uploading..." }));
     try {
-      const endpoint =
-        type === "image"
-          ? "/uploads/image"
-          : type === "video"
-            ? "/uploads/video"
-            : "/uploads/resource";
-      const response = await API.post(endpoint, formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-        onUploadProgress:
-          type === "video"
-            ? (progressEvent) => {
-                if (!progressEvent.total) {
-                  return;
-                }
-
-                const uploadPercent = Math.round(
-                  (progressEvent.loaded / progressEvent.total) * 35
-                );
-
-                setModuleProgress(moduleId, {
-                  active: true,
-                  phase: "uploading",
-                  percent: clampProgress(uploadPercent),
-                });
-              }
-            : undefined,
+      const endpoint = type === "image" ? "/uploads/image" : type === "video" ? "/uploads/video" : "/uploads/resource";
+      const res = await API.post(endpoint, formData, { headers: { "Content-Type": "multipart/form-data" } });
+      const data = res.data;
+      setLectureForms(curr => {
+        const form = curr[moduleId] || emptyLectureForm;
+        if (type === "video") return { ...curr, [moduleId]: { ...form, videoUrl: data.url, videoThumbnailUrl: data.thumbnailUrl, videoDuration: data.duration, videoOriginalSize: data.bytes } };
+        if (type === "image") return { ...curr, [moduleId]: { ...form, imageUrl: data.url, imageOriginalSize: data.bytes } };
+        return { ...curr, [moduleId]: { ...form, resourceUrl: data.url, resourceTitle: file.name, resourceOriginalSize: data.bytes } };
       });
-
-      if (type === "image") {
-        setLectureForms((current) => ({
-          ...current,
-          [moduleId]: {
-            ...getLectureForm(moduleId),
-            imageUrl: response.data.url,
-            imagePublicLabel: response.data.originalFilename || file.name,
-            imageFileName: file.name,
-          },
-        }));
-        setStatusMessage("Image uploaded successfully.");
-        setUploadStatusByModule((current) => ({
-          ...current,
-          [moduleId]: "Image ready to save with the lecture.",
-        }));
-        return;
-      }
-
-      if (type === "video") {
-        applyVideoUploadResult(moduleId, response.data, file);
-        setUploadStatusByModule((current) => ({
-          ...current,
-          [moduleId]:
-            response.data.message ||
-            "Upload complete. Preparing H.264 optimization...",
-        }));
-        setModuleProgress(moduleId, {
-          active: true,
-          phase: "processing",
-          percent: clampProgress(response.data.progress || 38),
-        });
-        beginVideoStatusPolling(moduleId, response.data.jobId, file);
-        setUploadStatusByModule((current) => ({
-          ...current,
-          [moduleId]:
-            response.data.message ||
-            "Upload complete. Preparing H.264 optimization...",
-        }));
-        return;
-      }
-
-      setLectureForms((current) => ({
-        ...current,
-        [moduleId]: {
-          ...getLectureForm(moduleId),
-          resourceTitle:
-            getLectureForm(moduleId).resourceTitle || response.data.originalFilename,
-          resourceUrl: response.data.url,
-          resourceType: response.data.type || "file",
-          resourcePublicLabel: response.data.originalFilename || file.name,
-          resourceFileName: file.name,
-          resourceExtractedText: response.data.extractedText || "",
-        },
-      }));
-      setStatusMessage("Resource uploaded successfully.");
-      setUploadStatusByModule((current) => ({
-        ...current,
-        [moduleId]: "Resource ready to save with the lecture.",
-      }));
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to upload file");
-      setUploadStatusByModule((current) => ({
-        ...current,
-        [moduleId]: "Upload failed. Try again.",
-      }));
-      if (type === "video") {
-        setModuleProgress(moduleId, {
-          active: false,
-          phase: "failed",
-          percent: 100,
-        });
-      }
-    }
+      setUploadStatusByModule(curr => ({ ...curr, [moduleId]: "Ready!" }));
+    } catch { setError("Upload failed"); }
   };
 
-  const handleLectureSubmit = async (event, moduleId) => {
-    event.preventDefault();
-    setError("");
-    setStatusMessage("");
-
-    const form = getLectureForm(moduleId);
-
+  const handleLectureSubmit = async (e, moduleId) => {
+    e.preventDefault();
+    const payload = buildLecturePayload(lectureForms[moduleId] || emptyLectureForm, moduleId);
     try {
-      if (editingLectureId) {
-        await API.put(`/lectures/${editingLectureId}`, buildLecturePayload(form, moduleId));
-        setStatusMessage("Lecture updated successfully.");
-      } else {
-        await API.post("/lectures", buildLecturePayload(form, moduleId));
-        setStatusMessage("Lecture created successfully.");
-      }
-
-      setLectureForms((current) => ({
-        ...current,
-        [moduleId]: emptyLectureForm,
-      }));
-      stopVideoPolling(moduleId);
-      setUploadStatusByModule((current) => ({
-        ...current,
-        [moduleId]: "",
-      }));
-      setModuleProgress(moduleId, {
-        active: false,
-        phase: "idle",
-        percent: 0,
-      });
+      if (editingLectureId) await API.put(`/lectures/${editingLectureId}`, payload);
+      else await API.post("/lectures", payload);
+      setLectureForms(curr => ({ ...curr, [moduleId]: emptyLectureForm }));
       setEditingLectureId(null);
       await fetchCourseData();
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to save lecture");
-    }
+    } catch { setError("Failed to save lecture"); }
   };
 
-  const startLectureEdit = (moduleId, lecture) => {
-    setEditingLectureId(lecture._id);
-    setLectureForms((current) => ({
-      ...current,
-      [moduleId]: hydrateLectureForm(lecture),
-    }));
-  };
-
-  const deleteLecture = async (lectureId) => {
-    setError("");
-    setStatusMessage("");
-
-    try {
-      await API.delete(`/lectures/${lectureId}`);
-      setStatusMessage("Lecture deleted successfully.");
-      await fetchCourseData();
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to delete lecture");
-    }
-  };
-
-  const handleQuizSubmit = async (event, moduleId) => {
-    event.preventDefault();
-    setError("");
-    setStatusMessage("");
-
-    const form = getQuizForm(moduleId);
-
-    try {
-      if (editingQuizId) {
-        await API.put(`/quizzes/${editingQuizId}`, buildQuizPayload(moduleId, form));
-        setStatusMessage("Quiz updated successfully.");
-      } else {
-        await API.post("/quizzes", buildQuizPayload(moduleId, form));
-        setStatusMessage("Quiz created successfully.");
-      }
-
-      setQuizForms((current) => ({
-        ...current,
-        [moduleId]: emptyQuizForm,
-      }));
-      setEditingQuizId(null);
-      await fetchCourseData();
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to save quiz");
-    }
-  };
-
-  const startQuizEdit = (moduleId, quiz) => {
-    setEditingQuizId(quiz._id);
-    setQuizForms((current) => ({
-      ...current,
-      [moduleId]: hydrateQuizForm(quiz),
-    }));
-  };
-
-  const deleteQuiz = async (quizId) => {
-    setError("");
-    setStatusMessage("");
-
-    try {
-      await API.delete(`/quizzes/${quizId}`);
-      setStatusMessage("Quiz deleted successfully.");
-      await fetchCourseData();
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to delete quiz");
-    }
-  };
-
-  if (loading) {
-    return (
-      <AppShell>
-        <section className="page-section page-narrow">
-          <p className="status-text">Loading builder...</p>
-        </section>
-      </AppShell>
-    );
-  }
-
-  if (error && !course) {
-    return (
-      <AppShell>
-        <section className="page-section page-narrow">
-          <p className="form-error">{error}</p>
-        </section>
-      </AppShell>
-    );
-  }
+  if (loading) return <SidebarLayout><div className="p-10 animate-pulse"><div className="h-12 bg-gray-200 dark:bg-gray-800 rounded-2xl w-1/4 mb-8"></div><div className="h-96 bg-gray-100 dark:bg-gray-800/50 rounded-[40px]"></div></div></SidebarLayout>;
 
   return (
-    <AppShell>
-      <section className="page-section">
-        <div className="section-heading">
-          <div>
-            <span className="eyebrow">Course Builder</span>
-            <h2>{course?.title}</h2>
-          </div>
-          <p className="page-subtitle">
-            Add modules and lectures to structure the learning experience.
-          </p>
-        </div>
-        {error ? <p className="form-error">{error}</p> : null}
-        {statusMessage ? <p className="status-text">{statusMessage}</p> : null}
+    <SidebarLayout>
+      <div className="p-6 lg:p-10 space-y-10">
+        
+        {/* Header */}
+        <header className="flex flex-wrap items-center justify-between gap-6">
+           <div>
+              <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[10px] font-black rounded-full uppercase tracking-widest mb-3 inline-block">Course Architect</span>
+              <h1 className="text-3xl lg:text-4xl font-black text-gray-900 dark:text-white">{course?.title}</h1>
+              <p className="text-gray-500 mt-2">Manage modules, lectures, and assessments.</p>
+           </div>
+           <div className="flex gap-3">
+              <button onClick={() => navigate(`/course/${courseId}`)} className="px-6 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-bold rounded-xl hover:bg-gray-200 transition-all">Preview Course</button>
+           </div>
+        </header>
 
-        <div className="builder-layout">
-          <article className="dashboard-card">
-            <h3>{editingModuleId ? "Edit Module" : "New Module"}</h3>
-            <form className="form-stack" onSubmit={handleModuleSubmit}>
-              <input
-                className="input"
-                placeholder="Module title"
-                value={moduleForm.title}
-                onChange={(event) =>
-                  setModuleForm((current) => ({
-                    ...current,
-                    title: event.target.value,
-                  }))
-                }
-              />
-              <input
-                className="input"
-                type="number"
-                min="1"
-                placeholder="Order"
-                value={moduleForm.order}
-                onChange={(event) =>
-                  setModuleForm((current) => ({
-                    ...current,
-                    order: event.target.value,
-                  }))
-                }
-              />
-              <div className="action-row">
-                <button type="submit" className="btn btn-inline">
-                  {editingModuleId ? "Update Module" : "Add Module"}
-                </button>
-                {editingModuleId ? (
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-inline"
-                    onClick={() => {
-                      setEditingModuleId(null);
-                      setModuleForm(emptyModuleForm);
-                    }}
-                  >
-                    Cancel
-                  </button>
-                ) : null}
+        {error && <div className="p-6 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/50 rounded-3xl text-red-600 font-bold">{error}</div>}
+
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-10 items-start">
+           
+           {/* Sidebar Module Navigation / Fast Access */}
+           <aside className="xl:col-span-1 space-y-6 sticky top-6">
+              <div className="bg-white dark:bg-gray-900 rounded-[40px] border border-gray-100 dark:border-gray-800 p-8 shadow-xl shadow-blue-600/5">
+                 <h3 className="text-xl font-black text-gray-900 dark:text-white mb-6 uppercase tracking-tight">Course Outline</h3>
+                 <div className="space-y-2">
+                    {modules.map((m) => (
+                      <button key={m._id} onClick={() => document.getElementById(`module-${m._id}`).scrollIntoView({ behavior: 'smooth' })} className="w-full text-left p-4 rounded-2xl text-xs font-bold text-gray-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 transition-all flex items-center gap-3">
+                         <span className="w-6 h-6 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-[10px]">{m.order}</span>
+                         {m.title}
+                      </button>
+                    ))}
+                    {modules.length === 0 && <p className="text-gray-400 italic text-sm">No modules created yet.</p>}
+                 </div>
               </div>
-            </form>
-          </article>
 
-          <div className="stack-list">
-            {modules.map((moduleItem) => {
-              const lectureForm = getLectureForm(moduleItem._id);
-              const lectures = lecturesByModule[moduleItem._id] || [];
-              const quizForm = getQuizForm(moduleItem._id);
-              const quizzes = quizzesByModule[moduleItem._id] || [];
-              const moduleUploadProgress =
-                uploadProgressByModule[moduleItem._id];
-              const isLectureUploadInProgress = Boolean(
-                moduleUploadProgress?.active
-              );
-
-              return (
-                <article key={moduleItem._id} className="dashboard-card">
-                  <div className="builder-header">
-                    <div>
-                      <span className="card-badge">Module {moduleItem.order}</span>
-                      <h3>{moduleItem.title}</h3>
-                    </div>
-                    <div className="action-row">
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-inline"
-                        onClick={() => startModuleEdit(moduleItem)}
-                      >
-                        Edit Module
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-inline"
-                        onClick={() => deleteModule(moduleItem._id)}
-                      >
-                        Delete Module
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="builder-subsection">
-                    <h4>Lectures</h4>
-                    <div className="stack-list">
-                      {lectures.map((lecture) => (
-                        <div key={lecture._id} className="builder-item">
-                          <div>
-                            <strong>
-                              {lecture.order}. {lecture.title}
-                            </strong>
-                            <p className="meta-text">
-                              {lecture.contents?.length || 0} content blocks
-                            </p>
-                            {lecture.contents?.some((item) => item.type === "video") ? (
-                              <p className="meta-text">Includes adaptive video content</p>
-                            ) : null}
-                            <p className="meta-text">
-                              Resources: {lecture.resources?.length || 0}
-                            </p>
-                          </div>
-                          <div className="action-row">
-                            <button
-                              type="button"
-                              className="btn btn-secondary btn-inline"
-                              onClick={() => startLectureEdit(moduleItem._id, lecture)}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-secondary btn-inline"
-                              onClick={() => deleteLecture(lecture._id)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="builder-subsection">
-                    <h4>
-                      {editingLectureId ? "Edit Lecture" : "Add Lecture"}
-                    </h4>
-                    <form
-                      className="form-stack"
-                      onSubmit={(event) =>
-                        handleLectureSubmit(event, moduleItem._id)
-                      }
-                    >
-                      <input
-                        className="input"
-                        placeholder="Lecture title"
-                        value={lectureForm.title}
-                        onChange={(event) =>
-                          updateLectureForm(
-                            moduleItem._id,
-                            "title",
-                            event.target.value
-                          )
-                        }
-                      />
-                      <input
-                        className="input"
+              <div className="bg-blue-600 rounded-[40px] p-8 text-white shadow-2xl shadow-blue-600/20">
+                 <h3 className="text-xl font-black mb-4">Add Module</h3>
+                 <form onSubmit={handleModuleSubmit} className="space-y-4">
+                    <input 
+                      className="w-full bg-blue-500/50 border-none rounded-2xl p-4 text-sm font-bold placeholder-blue-200 focus:ring-2 focus:ring-white" 
+                      placeholder="Module Title"
+                      value={moduleForm.title}
+                      onChange={e => setModuleForm({ ...moduleForm, title: e.target.value })}
+                    />
+                    <div className="flex gap-2">
+                       <input 
                         type="number"
-                        min="1"
-                        placeholder="Order"
-                        value={lectureForm.order}
-                        onChange={(event) =>
-                          updateLectureForm(
-                            moduleItem._id,
-                            "order",
-                            event.target.value
-                          )
-                        }
-                      />
-                      <textarea
-                        className="input input-textarea"
-                        placeholder="Text content"
-                        value={lectureForm.textContent}
-                        onChange={(event) =>
-                          updateLectureForm(
-                            moduleItem._id,
-                            "textContent",
-                            event.target.value
-                          )
-                        }
-                      />
-                      <div className="question-builder">
-                        <div className="builder-header">
-                          <h5>Image</h5>
-                          {lectureForm.imageUrl ? (
-                            <button
-                              type="button"
-                              className="btn btn-secondary btn-inline"
-                              onClick={() => clearLectureAsset(moduleItem._id, "image")}
-                            >
-                              Remove
-                            </button>
-                          ) : null}
-                        </div>
-                        <input
-                          className="input"
-                          type="file"
-                          accept="image/png,image/jpeg,image/webp,image/gif"
-                          onChange={(event) =>
-                            uploadLectureAsset(
-                              moduleItem._id,
-                              event.target.files?.[0],
-                              "image"
-                            )
-                          }
-                        />
-                        <p className="meta-text">
-                          {lectureForm.imagePublicLabel || "No image attached yet."}
-                        </p>
-                      </div>
-                      <div className="question-builder">
-                        <div className="builder-header">
-                          <h5>Video</h5>
-                          {lectureForm.videoUrl ? (
-                            <button
-                              type="button"
-                              className="btn btn-secondary btn-inline"
-                              onClick={() => clearLectureAsset(moduleItem._id, "video")}
-                            >
-                              Remove
-                            </button>
-                          ) : null}
-                        </div>
-                        <input
-                          className="input"
-                          type="file"
-                          accept="video/mp4,video/quicktime,video/webm,video/x-matroska"
-                          onChange={(event) =>
-                            uploadLectureAsset(
-                              moduleItem._id,
-                              event.target.files?.[0],
-                              "video"
-                            )
-                          }
-                        />
-                        <p className="meta-text">
-                          {lectureForm.videoPublicLabel || "No video attached yet."}
-                        </p>
-                        <p className="meta-text">
-                          Selected size: {formatFileSize(lectureForm.videoSelectedSize)} / Allowed: {formatFileSize(VIDEO_UPLOAD_LIMIT_BYTES)}
-                        </p>
-                        {moduleUploadProgress?.percent ? (
-                          <div className="upload-progress">
-                            <div className="upload-progress-header">
-                              <span className="meta-text">
-                                {uploadStatusByModule[moduleItem._id] ||
-                                  "Preparing upload..."}
-                              </span>
-                              <strong>{moduleUploadProgress.percent}%</strong>
-                            </div>
-                            <div className="upload-progress-track">
-                              <div
-                                className={`upload-progress-fill ${
-                                  moduleUploadProgress.phase === "failed"
-                                    ? "is-error"
-                                    : ""
-                                }`}
-                                style={{
-                                  width: `${moduleUploadProgress.percent}%`,
-                                }}
-                              />
-                            </div>
-                          </div>
-                        ) : null}
-                        {lectureForm.videoLowBandwidthOptimized ? (
-                          <p className="meta-text">
-                            H.264 low-bandwidth delivery is ready for this video.
-                          </p>
-                        ) : null}
-                        {lectureForm.videoDuration ? (
-                          <p className="meta-text">
-                            Duration: {Math.round(lectureForm.videoDuration)} seconds
-                          </p>
-                        ) : null}
-                        {lectureForm.videoAudioOnlyUrl ? (
-                          <p className="meta-text">
-                            Audio-only rural mode ready.
-                          </p>
-                        ) : null}
-                      </div>
-                      <input
-                        className="input"
-                        placeholder="Resource title (optional)"
-                        value={lectureForm.resourceTitle}
-                        onChange={(event) =>
-                          updateLectureForm(
-                            moduleItem._id,
-                            "resourceTitle",
-                            event.target.value
-                          )
-                        }
-                      />
-                      <div className="question-builder">
-                        <div className="builder-header">
-                          <h5>Resource</h5>
-                          {lectureForm.resourceUrl ? (
-                            <button
-                              type="button"
-                              className="btn btn-secondary btn-inline"
-                              onClick={() => clearLectureAsset(moduleItem._id, "resource")}
-                            >
-                              Remove
-                            </button>
-                          ) : null}
-                        </div>
-                        <input
-                          className="input"
-                          type="file"
-                          accept=".pdf,.doc,.docx,.txt,.ppt,.pptx"
-                          onChange={(event) =>
-                            uploadLectureAsset(
-                              moduleItem._id,
-                              event.target.files?.[0],
-                              "resource"
-                            )
-                          }
-                        />
-                        <p className="meta-text">
-                          {lectureForm.resourcePublicLabel || "No resource attached yet."}
-                        </p>
-                        {lectureForm.resourceType !== "file" && lectureForm.resourceUrl ? (
-                          <p className="meta-text">
-                            Detected as {lectureForm.resourceType} resource.
-                          </p>
-                        ) : null}
-                        {lectureForm.resourceExtractedText ? (
-                          <div className="resource-preview-wrap">
-                            <p className="meta-text">
-                              Extracted text preview (used for AI summary and MCQs):
-                            </p>
-                            <pre className="resource-text-preview">
-                              {lectureForm.resourceExtractedText.length > 1400
-                                ? `${lectureForm.resourceExtractedText.slice(0, 1400)}...`
-                                : lectureForm.resourceExtractedText}
-                            </pre>
-                          </div>
-                        ) : null}
-                      </div>
-                      <div className="action-row">
-                        {uploadStatusByModule[moduleItem._id] &&
-                        !moduleUploadProgress?.percent ? (
-                          <p className="meta-text">
-                            {uploadStatusByModule[moduleItem._id]}
-                          </p>
-                        ) : null}
-                        <button
-                          type="submit"
-                          className="btn btn-inline"
-                          disabled={isLectureUploadInProgress}
-                        >
-                          {editingLectureId ? "Update Lecture" : "Add Lecture"}
-                        </button>
-                        {editingLectureId ? (
-                          <button
-                            type="button"
-                            className="btn btn-secondary btn-inline"
-                            onClick={() => {
-                              stopVideoPolling(moduleItem._id);
-                              setEditingLectureId(null);
-                              setLectureForms((current) => ({
-                                ...current,
-                                [moduleItem._id]: emptyLectureForm,
-                              }));
-                              setUploadStatusByModule((current) => ({
-                                ...current,
-                                [moduleItem._id]: "",
-                              }));
-                              setModuleProgress(moduleItem._id, {
-                                active: false,
-                                phase: "idle",
-                                percent: 0,
-                              });
-                            }}
-                          >
-                            Cancel
-                          </button>
-                        ) : null}
-                      </div>
-                    </form>
-                  </div>
-
-                  <div className="builder-subsection">
-                    <h4>Quizzes</h4>
-                    <div className="stack-list">
-                      {quizzes.map((quiz) => (
-                        <div key={quiz._id} className="builder-item">
-                          <div>
-                            <strong>{quiz.title}</strong>
-                            <p className="meta-text">
-                              Passing score: {quiz.passingScore}% | Questions: {quiz.questions?.length || 0}
-                            </p>
-                            <p className="meta-text">
-                              Attempts: {attemptsByQuiz[quiz._id]?.length || 0}
-                            </p>
-                          </div>
-                          <div className="action-row">
-                            <button
-                              type="button"
-                              className="btn btn-secondary btn-inline"
-                              onClick={() => startQuizEdit(moduleItem._id, quiz)}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-secondary btn-inline"
-                              onClick={() => deleteQuiz(quiz._id)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                        className="w-20 bg-blue-500/50 border-none rounded-2xl p-4 text-sm font-bold focus:ring-2 focus:ring-white" 
+                        value={moduleForm.order}
+                        onChange={e => setModuleForm({ ...moduleForm, order: e.target.value })}
+                       />
+                       <button className="flex-1 bg-white text-blue-600 font-black rounded-2xl p-4 text-xs uppercase tracking-widest hover:bg-blue-50 transition-all">
+                          {editingModuleId ? "Update" : "Create"}
+                       </button>
                     </div>
-                    {quizzes.map((quiz) =>
-                      attemptsByQuiz[quiz._id]?.length ? (
-                        <div key={`${quiz._id}-attempts`} className="builder-subsection">
-                          <h4>{quiz.title} Attempts</h4>
-                          <div className="stack-list">
-                            {attemptsByQuiz[quiz._id].slice(0, 5).map((attempt) => (
-                              <div key={attempt._id} className="builder-item">
-                                <div>
-                                  <strong>{attempt.studentId?.name}</strong>
-                                  <p className="meta-text">{attempt.studentId?.email}</p>
-                                </div>
-                                <p className="meta-text">
-                                  Score: {attempt.score}% | {attempt.passed ? "Passed" : "Needs review"}
-                                </p>
+                 </form>
+              </div>
+           </aside>
+
+           {/* Main Module Editor Area */}
+           <main className="xl:col-span-2 space-y-12">
+              {modules.sort((a, b) => a.order - b.order).map((m) => (
+                <section key={m._id} id={`module-${m._id}`} className="bg-white dark:bg-gray-900 rounded-[48px] border border-gray-100 dark:border-gray-800 shadow-2xl shadow-blue-600/5 overflow-hidden transition-all hover:border-blue-500/30">
+                   
+                   {/* Module Banner */}
+                   <div className="bg-gray-50 dark:bg-gray-800/50 p-8 lg:p-10 flex flex-wrap items-center justify-between gap-6">
+                      <div className="flex items-center gap-6">
+                         <div className="w-16 h-16 rounded-3xl bg-blue-600 flex items-center justify-center text-white text-2xl font-black">{m.order}</div>
+                         <div>
+                            <h2 className="text-2xl font-black text-gray-900 dark:text-white">{m.title}</h2>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mt-1">Module Identity: {m._id.slice(-6)}</p>
+                         </div>
+                      </div>
+                      <div className="flex gap-2">
+                         <button onClick={() => startModuleEdit(m)} className="px-5 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-xs font-bold rounded-xl hover:text-blue-600">Edit</button>
+                         <button onClick={async () => { if(window.confirm('Delete module?')) { await API.delete(`/modules/${m._id}`); fetchCourseData(); } }} className="px-5 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-xs font-bold rounded-xl hover:text-red-500">Delete</button>
+                      </div>
+                   </div>
+
+                   <div className="p-8 lg:p-10 space-y-12">
+                      
+                      {/* Lectures Sub-list */}
+                      <div>
+                         <div className="flex items-center gap-4 mb-8">
+                            <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest">Lectures ({lecturesByModule[m._id]?.length || 0})</h4>
+                            <div className="h-px flex-1 bg-gray-50 dark:bg-gray-800" />
+                         </div>
+                         <div className="grid grid-cols-1 gap-4 mb-8">
+                            {lecturesByModule[m._id]?.map(l => (
+                              <div key={l._id} className="p-6 rounded-3xl bg-gray-50 dark:bg-gray-800/30 border border-gray-100 dark:border-gray-800 flex items-center justify-between group">
+                                 <div className="flex items-center gap-4">
+                                    <span className="text-2xl">📽️</span>
+                                    <div>
+                                       <p className="text-sm font-black text-gray-900 dark:text-white">{l.title}</p>
+                                       <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Order: {l.order} | {l.contents?.length || 0} Assets</p>
+                                    </div>
+                                 </div>
+                                 <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onClick={() => { setEditingLectureId(l._id); setLectureForms(curr => ({ ...curr, [m._id]: hydrateLectureForm(l) })); }} className="text-xs font-bold text-blue-600">Edit</button>
+                                    <button onClick={async () => { if(window.confirm('Delete lecture?')) { await API.delete(`/lectures/${l._id}`); fetchCourseData(); } }} className="text-xs font-bold text-red-500 ml-4">Delete</button>
+                                 </div>
                               </div>
                             ))}
-                          </div>
-                        </div>
-                      ) : null
-                    )}
-                  </div>
+                            {(!lecturesByModule[m._id] || lecturesByModule[m._id].length === 0) && <p className="text-center py-8 text-gray-400 italic text-sm bg-gray-50/50 dark:bg-gray-800/10 rounded-3xl">No lectures added to this module yet.</p>}
+                         </div>
 
-                  <div className="builder-subsection">
-                    <h4>{editingQuizId ? "Edit Quiz" : "Add Quiz"}</h4>
-                    <form
-                      className="form-stack"
-                      onSubmit={(event) => handleQuizSubmit(event, moduleItem._id)}
-                    >
-                      <input
-                        className="input"
-                        placeholder="Quiz title"
-                        value={quizForm.title}
-                        onChange={(event) =>
-                          updateQuizForm(moduleItem._id, "title", event.target.value)
-                        }
-                      />
-                      <textarea
-                        className="input input-textarea"
-                        placeholder="Quiz description"
-                        value={quizForm.description}
-                        onChange={(event) =>
-                          updateQuizForm(
-                            moduleItem._id,
-                            "description",
-                            event.target.value
-                          )
-                        }
-                      />
-                      <input
-                        className="input"
-                        type="number"
-                        min="0"
-                        max="100"
-                        placeholder="Passing score"
-                        value={quizForm.passingScore}
-                        onChange={(event) =>
-                          updateQuizForm(
-                            moduleItem._id,
-                            "passingScore",
-                            event.target.value
-                          )
-                        }
-                      />
-                      <input
-                        className="input"
-                        type="number"
-                        min="0"
-                        placeholder="Time limit in minutes"
-                        value={quizForm.timeLimitMinutes}
-                        onChange={(event) =>
-                          updateQuizForm(
-                            moduleItem._id,
-                            "timeLimitMinutes",
-                            event.target.value
-                          )
-                        }
-                      />
-                      <div className="stack-list">
-                        {quizForm.questions.map((question, questionIndex) => (
-                          <div key={questionIndex} className="question-builder">
-                            <div className="builder-header">
-                              <h5>Question {questionIndex + 1}</h5>
-                              <button
-                                type="button"
-                                className="btn btn-secondary btn-inline"
-                                onClick={() =>
-                                  removeQuizQuestion(moduleItem._id, questionIndex)
-                                }
-                              >
-                                Remove
-                              </button>
-                            </div>
-                            <input
-                              className="input"
-                              placeholder="Question"
-                              value={question.questionText}
-                              onChange={(event) =>
-                                updateQuizQuestion(
-                                  moduleItem._id,
-                                  questionIndex,
-                                  "questionText",
-                                  event.target.value
-                                )
-                              }
-                            />
-                            <input
-                              className="input"
-                              placeholder="Option A"
-                              value={question.optionA}
-                              onChange={(event) =>
-                                updateQuizQuestion(
-                                  moduleItem._id,
-                                  questionIndex,
-                                  "optionA",
-                                  event.target.value
-                                )
-                              }
-                            />
-                            <input
-                              className="input"
-                              placeholder="Option B"
-                              value={question.optionB}
-                              onChange={(event) =>
-                                updateQuizQuestion(
-                                  moduleItem._id,
-                                  questionIndex,
-                                  "optionB",
-                                  event.target.value
-                                )
-                              }
-                            />
-                            <input
-                              className="input"
-                              placeholder="Option C"
-                              value={question.optionC}
-                              onChange={(event) =>
-                                updateQuizQuestion(
-                                  moduleItem._id,
-                                  questionIndex,
-                                  "optionC",
-                                  event.target.value
-                                )
-                              }
-                            />
-                            <input
-                              className="input"
-                              placeholder="Option D"
-                              value={question.optionD}
-                              onChange={(event) =>
-                                updateQuizQuestion(
-                                  moduleItem._id,
-                                  questionIndex,
-                                  "optionD",
-                                  event.target.value
-                                )
-                              }
-                            />
-                            <select
-                              className="input"
-                              value={question.correctAnswer}
-                              onChange={(event) =>
-                                updateQuizQuestion(
-                                  moduleItem._id,
-                                  questionIndex,
-                                  "correctAnswer",
-                                  event.target.value
-                                )
-                              }
-                            >
-                              <option value={0}>Correct answer: Option A</option>
-                              <option value={1}>Correct answer: Option B</option>
-                              <option value={2}>Correct answer: Option C</option>
-                              <option value={3}>Correct answer: Option D</option>
-                            </select>
-                            <textarea
-                              className="input input-textarea"
-                              placeholder="Explanation"
-                              value={question.explanation}
-                              onChange={(event) =>
-                                updateQuizQuestion(
-                                  moduleItem._id,
-                                  questionIndex,
-                                  "explanation",
-                                  event.target.value
-                                )
-                              }
-                            />
-                          </div>
-                        ))}
+                         {/* Add Lecture Form (Nested) */}
+                         <div className="bg-white dark:bg-gray-900 border border-blue-500/20 rounded-[40px] p-8 shadow-2xl shadow-blue-600/5">
+                            <h5 className="text-lg font-black text-gray-900 dark:text-white mb-6 flex items-center gap-3">
+                               <span className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">+</span>
+                               {editingLectureId ? "Edit Lecture" : "Add New Lecture"}
+                            </h5>
+                            <form onSubmit={e => handleLectureSubmit(e, m._id)} className="space-y-6">
+                               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                  <div className="md:col-span-3">
+                                     <input 
+                                      className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none text-sm font-bold placeholder-gray-400 focus:ring-2 focus:ring-blue-500" 
+                                      placeholder="Lecture Title"
+                                      value={lectureForms[m._id]?.title || ""}
+                                      onChange={e => updateLectureForm(m._id, 'title', e.target.value)}
+                                     />
+                                  </div>
+                                  <div className="md:col-span-1">
+                                     <input 
+                                      type="number"
+                                      className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none text-sm font-bold focus:ring-2 focus:ring-blue-500" 
+                                      placeholder="Order"
+                                      value={lectureForms[m._id]?.order || 1}
+                                      onChange={e => updateLectureForm(m._id, 'order', e.target.value)}
+                                     />
+                                  </div>
+                               </div>
+
+                               <textarea 
+                                className="w-full p-6 rounded-3xl bg-gray-50 dark:bg-gray-800 border-none text-sm text-gray-700 dark:text-gray-300 placeholder-gray-400 focus:ring-2 focus:ring-blue-500"
+                                placeholder="Text content (optional)"
+                                rows={3}
+                                value={lectureForms[m._id]?.textContent || ""}
+                                onChange={e => updateLectureForm(m._id, 'textContent', e.target.value)}
+                               />
+
+                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                  <div className="p-6 rounded-3xl bg-blue-50/30 dark:bg-blue-900/10 border border-blue-100/50 dark:border-blue-900/20">
+                                     <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-4">Video Asset (Recommended)</p>
+                                     <input 
+                                      type="file" accept="video/*" 
+                                      className="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-blue-600 file:text-white hover:file:bg-blue-700"
+                                      onChange={e => uploadLectureAsset(m._id, e.target.files[0], 'video')}
+                                     />
+                                     {lectureForms[m._id]?.videoUrl && <p className="mt-4 text-[10px] font-bold text-green-600 uppercase">✓ Video Attached ({formatFileSize(lectureForms[m._id].videoOriginalSize)})</p>}
+                                  </div>
+                                  <div className="p-6 rounded-3xl bg-purple-50/30 dark:bg-purple-900/10 border border-purple-100/50 dark:border-purple-900/20">
+                                     <p className="text-[10px] font-black text-purple-600 uppercase tracking-widest mb-4">Supplementary PDF</p>
+                                     <input 
+                                      type="file" accept=".pdf" 
+                                      className="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-purple-600 file:text-white hover:file:bg-purple-700"
+                                      onChange={e => uploadLectureAsset(m._id, e.target.files[0], 'pdf')}
+                                     />
+                                     {lectureForms[m._id]?.resourceUrl && <p className="mt-4 text-[10px] font-bold text-green-600 uppercase">✓ PDF Attached</p>}
+                                  </div>
+                               </div>
+
+                               <div className="flex items-center justify-between pt-4">
+                                  <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{uploadStatusByModule[m._id] || "All systems ready"}</div>
+                                  <div className="flex gap-3">
+                                     {editingLectureId && <button type="button" onClick={() => { setEditingLectureId(null); setLectureForms(curr => ({ ...curr, [m._id]: emptyLectureForm })); }} className="px-6 py-3 bg-gray-100 dark:bg-gray-800 text-gray-500 text-xs font-bold rounded-xl">Cancel</button>}
+                                     <button type="submit" className="px-10 py-3 bg-blue-600 text-white text-xs font-black rounded-xl uppercase tracking-widest shadow-xl shadow-blue-600/20 transition-all hover:scale-105">
+                                        {editingLectureId ? "Update Lecture" : "Save Lecture"}
+                                     </button>
+                                  </div>
+                               </div>
+                            </form>
+                         </div>
                       </div>
-                      <div className="action-row">
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-inline"
-                          onClick={() => addQuizQuestion(moduleItem._id)}
-                        >
-                          Add Question
-                        </button>
-                        <button type="submit" className="btn btn-inline">
-                          {editingQuizId ? "Update Quiz" : "Add Quiz"}
-                        </button>
-                        {editingQuizId ? (
-                          <button
-                            type="button"
-                            className="btn btn-secondary btn-inline"
-                            onClick={() => {
-                              setEditingQuizId(null);
-                              setQuizForms((current) => ({
-                                ...current,
-                                [moduleItem._id]: emptyQuizForm,
-                              }));
-                            }}
-                          >
-                            Cancel
-                          </button>
-                        ) : null}
+
+                      {/* Quizzes Sub-list */}
+                      <div>
+                         <div className="flex items-center gap-4 mb-8">
+                            <h4 className="text-xs font-black text-orange-600 uppercase tracking-widest">Assessments ({quizzesByModule[m._id]?.length || 0})</h4>
+                            <div className="h-px flex-1 bg-gray-50 dark:bg-gray-800" />
+                         </div>
+                         <div className="grid grid-cols-1 gap-4 mb-8">
+                            {quizzesByModule[m._id]?.map(q => (
+                              <div key={q._id} className="p-6 rounded-3xl bg-orange-50/20 dark:bg-orange-900/10 border border-orange-100/30 dark:border-orange-900/20 flex items-center justify-between group">
+                                 <div className="flex items-center gap-4">
+                                    <span className="text-2xl">📝</span>
+                                    <div>
+                                       <p className="text-sm font-black text-gray-900 dark:text-white">{q.title}</p>
+                                       <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">{q.questions?.length || 0} Questions | Passing: {q.passingScore}%</p>
+                                    </div>
+                                 </div>
+                                 <button onClick={async () => { if(window.confirm('Delete quiz?')) { await API.delete(`/quizzes/${q._id}`); fetchCourseData(); } }} className="text-xs font-bold text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">Delete</button>
+                              </div>
+                            ))}
+                            {(!quizzesByModule[m._id] || quizzesByModule[m._id].length === 0) && <p className="text-center py-8 text-gray-400 italic text-sm bg-orange-50/10 dark:bg-orange-900/5 rounded-3xl">No quizzes added yet.</p>}
+                         </div>
+                         <div className="text-center">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">Quiz management is coming soon to the new builder UI.</p>
+                         </div>
                       </div>
-                    </form>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
+
+                   </div>
+                </section>
+              ))}
+
+              {modules.length === 0 && (
+                <div className="py-20 text-center bg-gray-50 dark:bg-gray-900/50 rounded-[64px] border-2 border-dashed border-gray-200 dark:border-gray-800">
+                   <div className="text-6xl mb-6 opacity-20">🏗️</div>
+                   <h3 className="text-2xl font-black text-gray-400">Your course is empty</h3>
+                   <p className="text-gray-500 mt-2">Start by creating your first module using the blue card on the left.</p>
+                </div>
+              )}
+           </main>
+
         </div>
-      </section>
-    </AppShell>
+      </div>
+    </SidebarLayout>
   );
 };
 

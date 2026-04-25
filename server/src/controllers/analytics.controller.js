@@ -31,6 +31,30 @@ export const getTeacherOverview = asyncHandler(async (req, res) => {
                       attempts.length
               );
 
+    const totalCompletion = enrollments.reduce((sum, e) => sum + (e.progressPercent || 0), 0);
+    const averageCompletion = enrollments.length === 0 ? 0 : Math.round(totalCompletion / enrollments.length);
+
+    // Monthly engagement for the last 12 months
+    const now = new Date();
+    const months = [];
+    for (let i = 11; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        months.push({
+            month: d.toLocaleString('default', { month: 'short' }),
+            year: d.getFullYear(),
+            count: 0
+        });
+    }
+
+    enrollments.forEach(e => {
+        const ed = new Date(e.enrolledAt);
+        const monthIndex = months.findIndex(m => 
+            m.month === ed.toLocaleString('default', { month: 'short' }) && 
+            m.year === ed.getFullYear()
+        );
+        if (monthIndex !== -1) months[monthIndex].count++;
+    });
+
     const coursePerformance = courses
         .map((course) => {
             const courseEnrollments = enrollments.filter(
@@ -93,11 +117,52 @@ export const getTeacherOverview = asyncHandler(async (req, res) => {
             totalModules: modules.length,
             totalEnrollments: enrollments.length,
             averageQuizScore,
+            averageCompletion,
         },
+        monthlyEngagement: months,
         hardestQuiz,
         coursePerformance,
         courses,
     });
+});
+
+export const getTeacherStudents = asyncHandler(async (req, res) => {
+    const teacherId =
+        req.user.role === "admin" && req.query.teacherId
+            ? req.query.teacherId
+            : req.user._id;
+
+    const courses = await Course.find({ teacherId }).select("_id");
+    const courseIds = courses.map((c) => c._id);
+
+    const enrollments = await Enrollment.find({ courseId: { $in: courseIds } })
+        .populate("studentId", "name email profileImage")
+        .populate("courseId", "title");
+
+    // Group by Course
+    const courseMap = {};
+    enrollments.forEach((e) => {
+        if (!e.courseId || !e.studentId) return;
+        const cId = e.courseId._id.toString();
+        if (!courseMap[cId]) {
+            courseMap[cId] = {
+                courseId: e.courseId._id,
+                title: e.courseId.title,
+                students: []
+            };
+        }
+        courseMap[cId].students.push({
+            studentId: e.studentId._id,
+            name: e.studentId.name,
+            email: e.studentId.email,
+            profileImage: e.studentId.profileImage,
+            enrolledAt: e.enrolledAt,
+            status: e.status,
+            progressPercent: e.progressPercent
+        });
+    });
+
+    res.json(Object.values(courseMap));
 });
 
 export const getAdminOverview = asyncHandler(async (req, res) => {

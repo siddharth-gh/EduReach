@@ -11,7 +11,8 @@
     "signup": "Signup",
     "language": "Language",
     "english": "English",
-    "hindi": "Hindi"
+    "hindi": "Hindi",
+    "punjabi": "Punjabi"
   },
   "app": {
     "offlineBanner": "You're offline. Cached pages and saved learning content are still available.",

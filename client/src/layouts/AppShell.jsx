@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Navbar from "../components/Navbar";
+import MobileNav from "../components/MobileNav";
 
 const AppShell = ({ children }) => {
   const { t } = useTranslation();
@@ -60,6 +61,11 @@ const AppShell = ({ children }) => {
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
+    if (theme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
     localStorage.setItem("theme", theme);
   }, [theme]);
 
@@ -80,29 +86,31 @@ const AppShell = ({ children }) => {
   };
 
   return (
-    <div className="app-shell">
+    <div className="min-h-screen bg-white dark:bg-[#0f172a] transition-colors duration-200">
       {isOffline ? (
-        <div className="app-status-banner">
+        <div className="bg-red-600 text-white text-center py-2 text-sm font-medium">
           {t("app.offlineBanner")}
         </div>
       ) : null}
       {!isStandalone ? (
-        <div className="app-status-banner app-status-banner-secondary">
-          {t("app.installBanner")}
-          {isIOS && !installEvent ? (
-            <span className="install-hint">
-              {t("app.iosInstallHint")}
-            </span>
-          ) : null}
-          {!isIOS && !installEvent ? (
-            <span className="install-hint">
-              {t("app.desktopInstallHint")}
-            </span>
-          ) : null}
+        <div className="bg-blue-600 dark:bg-blue-900/50 text-white text-center py-3 px-4 text-sm flex flex-wrap items-center justify-center gap-3">
+          <span>
+            {t("app.installBanner")}
+            {isIOS && !installEvent ? (
+              <span className="opacity-80 ml-2">
+                {t("app.iosInstallHint")}
+              </span>
+            ) : null}
+            {!isIOS && !installEvent ? (
+              <span className="opacity-80 ml-2">
+                {t("app.desktopInstallHint")}
+              </span>
+            ) : null}
+          </span>
           {installEvent ? (
             <button
               type="button"
-              className="btn btn-inline install-btn"
+              className="bg-white text-blue-600 px-4 py-1.5 rounded-full text-xs font-bold hover:bg-gray-100 transition-all"
               onClick={handleInstall}
             >
               {t("app.installApp")}

@@ -3,6 +3,8 @@ import Module from "../models/module.model.js";
 import Course from "../models/course.model.js";
 import Progress from "../models/progress.model.js";
 import Note from "../models/note.model.js";
+import Quiz from "../models/quiz.model.js";
+import AdaptiveQuizSession from "../models/adaptiveQuizSession.model.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { generateLectureAssistantReply } from "../services/ai.service.js";
 import { queueLectureAiProcessing } from "../utils/lectureAiProcessor.js";
@@ -10,7 +12,7 @@ import { queueLectureAiProcessing } from "../utils/lectureAiProcessor.js";
 // @desc Create Lecture
 // @route POST /api/lectures
 export const createLecture = asyncHandler(async (req, res) => {
-    const { moduleId, title, order, contents, resources } = req.body;
+    const { moduleId, title, order, contents, resources, transcript } = req.body;
 
     if (!moduleId || !title || order === undefined) {
         res.status(400);
@@ -43,6 +45,7 @@ export const createLecture = asyncHandler(async (req, res) => {
         order,
         contents,
         resources,
+        transcript,
     });
 
     module.lectureIds.push(lecture._id);
@@ -81,7 +84,7 @@ export const getLectureById = asyncHandler(async (req, res) => {
 // @desc Update Lecture
 // @route PUT /api/lectures/:id
 export const updateLecture = asyncHandler(async (req, res) => {
-    const { title, order, contents, resources } = req.body;
+    const { title, order, contents, resources, transcript } = req.body;
 
     const lecture = await Lecture.findById(req.params.id);
     if (!lecture) {
@@ -113,6 +116,7 @@ export const updateLecture = asyncHandler(async (req, res) => {
     if (order !== undefined) lecture.order = order;
     if (contents) lecture.contents = contents;
     if (resources) lecture.resources = resources;
+    if (transcript) lecture.transcript = transcript;
 
     await lecture.save();
 
@@ -225,6 +229,8 @@ export const deleteLecture = asyncHandler(async (req, res) => {
 
     await Progress.deleteMany({ lectureId: lecture._id });
     await Note.deleteMany({ lectureId: lecture._id });
+    await Quiz.deleteMany({ sourceLectureId: lecture._id, generatedBy: "ai" });
+    await AdaptiveQuizSession.deleteMany({ lectureId: lecture._id });
     await lecture.deleteOne();
 
     res.json({ message: "Lecture deleted successfully" });

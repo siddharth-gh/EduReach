@@ -58,14 +58,14 @@ export const AuthProvider = ({ children }) => {
     setUser(nextUser);
   }, []);
 
-  const login = async (credentials) => {
-    const response = await API.post("/auth/login", credentials);
+  const login = async (email, password) => {
+    const response = await API.post("/auth/login", { email, password });
     persistSession(response.data.token, response.data.user);
     return response.data.user;
   };
 
-  const signup = async (payload) => {
-    const response = await API.post("/auth/signup", payload);
+  const signup = async (name, email, password, role) => {
+    const response = await API.post("/auth/signup", { name, email, password, role });
     persistSession(response.data.token, response.data.user);
     return response.data.user;
   };

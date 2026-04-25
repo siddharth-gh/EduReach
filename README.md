@@ -39,6 +39,8 @@ Use the included examples:
 
 Local lecture uploads are stored under `server/uploads`.
 For video optimization, make sure `ffmpeg` is installed and available in your system `PATH`.
+For AI lecture summaries, MCQs, and chat, set `GEMINI_API_KEY` to your Google AI Studio API key in `server/.env`. The default model is `gemma-3-27b-it`; override it with `GOOGLE_AI_MODEL` if your AI Studio project uses a different Gemma model.
+For automatic video transcripts, set `OPENAI_API_KEY` and `ENABLE_WHISPER_TRANSCRIPTION=true` in `server/.env`. Keep `ENABLE_WHISPER_TRANSCRIPTION=false` while testing to use a sample AI transcript without making paid transcription calls.
 
 ## Run Locally
 

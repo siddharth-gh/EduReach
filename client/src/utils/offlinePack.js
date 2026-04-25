@@ -24,7 +24,7 @@ const normalizeResourceType = (resource) => {
 const cacheAsset = async (cache, url) => {
   try {
     const response = await fetch(url, { cache: "no-store" });
-    if (response.ok) {
+    if (response.ok || response.type === "opaque") {
       await cache.put(url, response.clone());
       return true;
     }
@@ -86,8 +86,10 @@ export const downloadCoursePack = async (courseId) => {
     })
   );
 
+  const uniqueAssetUrls = [...new Set(assetUrls)];
+
   const results = await Promise.all(
-    assetUrls.map((url) => cacheAsset(cache, url))
+    uniqueAssetUrls.map((url) => cacheAsset(cache, url))
   );
   const cachedCount = results.filter(Boolean).length;
 
@@ -103,7 +105,7 @@ export const downloadCoursePack = async (courseId) => {
   localStorage.setItem(OFFLINE_INDEX_KEY, JSON.stringify(nextIndex));
 
   return {
-    assetCount: assetUrls.length,
+    assetCount: uniqueAssetUrls.length,
     cachedCount,
   };
 };

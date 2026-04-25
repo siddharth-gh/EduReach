@@ -1,10 +1,12 @@
+import "../config/env.js";
 import { GoogleGenAI } from "@google/genai";
 
-const DEFAULT_AI_PROVIDER = (process.env.AI_PROVIDER || "ollama").toLowerCase();
-const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-const DEFAULT_OLLAMA_MODEL = process.env.OLLAMA_MODEL || "phi";
-const DEFAULT_OLLAMA_BASE_URL =
-    process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
+const DEFAULT_GOOGLE_AI_MODEL =
+    process.env.GOOGLE_AI_MODEL ||
+    process.env.GEMMA_MODEL ||
+    process.env.AI_CHAT_MODEL ||
+    process.env.GEMINI_MODEL ||
+    "gemma-3-27b-it";
 
 const extractJson = (value) => {
     if (!value) {
@@ -51,9 +53,9 @@ const normalizeGeminiError = (error) => {
         rawMessage.includes("429")
     ) {
         const friendlyError = new Error(
-            "Gemini quota is exhausted right now. Try again later or switch AI_PROVIDER=ollama."
+            "Google AI Studio quota is exhausted right now. Try again later or reduce AI usage."
         );
-        friendlyError.code = "GEMINI_QUOTA_EXHAUSTED";
+        friendlyError.code = "GOOGLE_AI_QUOTA_EXHAUSTED";
         throw friendlyError;
     }
 
@@ -72,48 +74,18 @@ const getGeminiClient = () => {
 
 const isGeminiConfigured = () => Boolean(process.env.GEMINI_API_KEY);
 
-const isOllamaConfigured = () =>
-    Boolean(process.env.OLLAMA_BASE_URL || process.env.OLLAMA_MODEL);
-
-const getProvider = () => DEFAULT_AI_PROVIDER;
-
-const generateWithOllama = async (prompt, schema) => {
-    const response = await fetch(`${DEFAULT_OLLAMA_BASE_URL}/api/generate`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-            model: DEFAULT_OLLAMA_MODEL,
-            prompt,
-            stream: false,
-            format: schema || "json",
-            options: {
-                temperature: 0.2,
-            },
-        }),
-    });
-
-    const payload = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-        throw new Error(
-            payload?.error ||
-                `Ollama request failed with status ${response.status}`
-        );
-    }
-
-    return extractJson(payload?.response || "");
-};
-
-const generateWithGemini = async (prompt) => {
+const generateWithGemini = async (
+    prompt,
+    model = DEFAULT_GOOGLE_AI_MODEL,
+    { temperature = 0.2 } = {}
+) => {
     try {
         const client = getGeminiClient();
         const response = await client.models.generateContent({
-            model: DEFAULT_GEMINI_MODEL,
+            model,
             contents: prompt,
             config: {
-                responseMimeType: "application/json",
+                temperature,
             },
         });
 
@@ -123,35 +95,13 @@ const generateWithGemini = async (prompt) => {
     }
 };
 
-const generateJson = async (prompt, schema) => {
-    const provider = getProvider();
-
-    if (provider === "ollama") {
-        return generateWithOllama(prompt, schema);
-    }
-
-    if (provider === "gemini") {
-        return generateWithGemini(prompt);
-    }
-
-    throw new Error(
-        `Unsupported AI_PROVIDER "${provider}". Use "ollama" or "gemini".`
-    );
+const generateJson = async (prompt, _schema, options = {}) => {
+    return generateWithGemini(prompt, options.model, {
+        temperature: options.temperature,
+    });
 };
 
-export const isAiConfigured = () => {
-    const provider = getProvider();
-
-    if (provider === "ollama") {
-        return isOllamaConfigured();
-    }
-
-    if (provider === "gemini") {
-        return isGeminiConfigured();
-    }
-
-    return false;
-};
+export const isAiConfigured = () => isGeminiConfigured();
 
 export const generateLectureSummary = async ({
     courseTitle,
@@ -215,6 +165,12 @@ export const generateLectureAssistantReply = async ({
     transcriptText,
     messages,
 }) => {
+    if (!isGeminiConfigured()) {
+        throw new Error("GEMINI_API_KEY is required for Google AI Studio");
+    }
+    const assistantModel = DEFAULT_GOOGLE_AI_MODEL;
+    const assistantLabel = `Google AI Studio (${assistantModel})`;
+
     const conversation = messages
         .slice(-6)
         .map(
@@ -282,9 +238,15 @@ Rules:
         },
         required: ["reply", "mcqs"],
         additionalProperties: false,
+    }, {
+        model: assistantModel,
+        temperature: 0.2,
     });
 
     return {
+        provider: "google-ai-studio",
+        model: assistantModel,
+        label: assistantLabel,
         reply: typeof parsed.reply === "string" ? parsed.reply.trim() : "",
         mcqs: Array.isArray(parsed.mcqs)
             ? parsed.mcqs
@@ -308,15 +270,17 @@ Rules:
     };
 };
 
-export const generateLectureMcqSet = async ({
+export const generateAdaptiveQuestionBank = async ({
     courseTitle,
     moduleTitle,
     lectureTitle,
     lectureText,
     transcriptText,
+    difficulty = "medium",
+    count = 5,
 }) => {
-    const parsed = await generateJson(`You are an educational assessment assistant.
-
+    const parsed = await generateJson(`You are an adaptive educational assessment assistant.
+    
 Course: ${courseTitle}
 Module: ${moduleTitle}
 Lecture: ${lectureTitle}
@@ -330,30 +294,36 @@ ${transcriptText || "N/A"}
 
 Return strict JSON with this shape only:
 {
-  "mcqs": [
+  "questions": [
     {
       "question": "Question text",
-      "options": ["A", "B", "C", "D"],
+      "options": ["Full answer option 1", "Full answer option 2", "Full answer option 3", "Full answer option 4"],
       "correctAnswer": 0,
-      "explanation": "Why it is correct"
+      "explanation": "Why it is correct",
+      "difficulty": "${difficulty}",
+      "concept": "Specific concept name",
+      "learningObjective": "What this question checks"
     }
   ]
 }
 
 Rules:
-- Generate exactly 5 MCQs.
+- Generate exactly ${count} questions.
+- Every question must be of difficulty: ${difficulty}.
+- Cover 2 to 3 distinct concepts from the lecture.
 - Keep questions grounded in the context only.
 - Each question must have exactly 4 options.
+- Options must be complete, descriptive answer choices.
 - correctAnswer must be 0, 1, 2 or 3.
 - Keep explanations concise and clear.
 - Do not include markdown.
 - Return valid JSON only.`, {
         type: "object",
         properties: {
-            mcqs: {
+            questions: {
                 type: "array",
-                minItems: 5,
-                maxItems: 5,
+                minItems: count,
+                maxItems: count,
                 items: {
                     type: "object",
                     properties: {
@@ -366,38 +336,71 @@ Rules:
                         },
                         correctAnswer: { type: "number" },
                         explanation: { type: "string" },
+                        difficulty: { type: "string" },
+                        concept: { type: "string" },
+                        learningObjective: { type: "string" },
                     },
-                    required: ["question", "options", "correctAnswer", "explanation"],
+                    required: [
+                        "question",
+                        "options",
+                        "correctAnswer",
+                        "explanation",
+                        "difficulty",
+                        "concept",
+                        "learningObjective",
+                    ],
                     additionalProperties: false,
                 },
             },
         },
-        required: ["mcqs"],
+        required: ["questions"],
         additionalProperties: false,
     });
 
-    const normalized = Array.isArray(parsed.mcqs)
-        ? parsed.mcqs
-              .map((mcq) => ({
-                  question: String(mcq?.question || "").trim(),
-                  options: Array.isArray(mcq?.options)
-                      ? mcq.options
+    const difficulties = ["easy", "medium", "hard"];
+    const normalized = Array.isArray(parsed.questions)
+        ? parsed.questions
+              .map((question) => ({
+                  question: String(question?.question || "").trim(),
+                  options: Array.isArray(question?.options)
+                      ? question.options
                             .map((option) => String(option || "").trim())
                             .filter(Boolean)
                             .slice(0, 4)
                       : [],
                   correctAnswer:
-                      typeof mcq?.correctAnswer === "number"
-                          ? Math.max(0, Math.min(3, Math.trunc(mcq.correctAnswer)))
+                      typeof question?.correctAnswer === "number"
+                          ? Math.max(0, Math.min(3, Math.trunc(question.correctAnswer)))
                           : 0,
-                  explanation: String(mcq?.explanation || "").trim(),
+                  explanation: String(question?.explanation || "").trim(),
+                  difficulty: difficulties.includes(
+                      String(question?.difficulty || "").toLowerCase()
+                  )
+                      ? String(question.difficulty).toLowerCase()
+                      : difficulty,
+                  concept:
+                      String(question?.concept || "").trim() || "Core concept",
+                  learningObjective: String(
+                      question?.learningObjective || ""
+                  ).trim(),
               }))
-              .filter((mcq) => mcq.question && mcq.options.length === 4)
-              .slice(0, 5)
+              .filter(
+                  (question) =>
+                      question.question &&
+                      question.options.length === 4 &&
+                      question.options.every(
+                          (option) =>
+                              option.length > 1 &&
+                              !/^[abcd]$/i.test(option) &&
+                              !/^option\s*\d+$/i.test(option) &&
+                              !/^choice\s*\d+$/i.test(option)
+                      )
+              )
+              .slice(0, count)
         : [];
 
-    if (normalized.length < 5) {
-        throw new Error("AI did not return 5 valid MCQs");
+    if (normalized.length === 0) {
+        throw new Error(`AI did not return any valid adaptive questions for ${difficulty}`);
     }
 
     return normalized;

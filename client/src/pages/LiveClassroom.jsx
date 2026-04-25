@@ -67,7 +67,7 @@ const LiveClassroom = () => {
   const iceServers = useMemo(() => buildIceServers(), []);
   const isTeacherHost =
     user?.role === "teacher" &&
-    course?.teacherId?._id === user?._id;
+    course?.teacherId?._id === user?.id;
 
   const canJoin = Boolean(session?.isActive);
 
@@ -361,117 +361,102 @@ const LiveClassroom = () => {
       <section className="page-section">
         <div className="section-heading">
           <div>
-            <span className="eyebrow">Live Classroom</span>
-            <h2>{course?.title || "Course live session"}</h2>
+            <span className="eyebrow">Studio Mode</span>
+            <h2>{course?.title || "Live Session"}</h2>
           </div>
           <button
             type="button"
             className="btn btn-secondary btn-inline"
             onClick={() => navigate(-1)}
           >
-            Back
+            Leave
           </button>
         </div>
-        {error ? <p className="form-error">{error}</p> : null}
-        {statusMessage ? <p className="status-text">{statusMessage}</p> : null}
 
-        <div className="dashboard-grid dashboard-grid-double">
-          <article className="dashboard-card">
-            <div className="builder-header">
-              <div>
-                <span className="card-badge">Session</span>
-                <h3>
-                  {session?.isActive ? "Live now" : "Currently offline"}
-                </h3>
-              </div>
-              <span className="meta-pill">WebRTC low-latency mode</span>
+        {error ? <p className="form-error">{error}</p> : null}
+
+        <div className="live-studio-container">
+          {session?.isActive && (
+            <div className="live-indicator">● LIVE</div>
+          )}
+          
+          <div className="live-status-pill">
+            {isSocketConnected ? "✓ Network Stable" : "⚠ Connecting..."}
+          </div>
+
+          {!isStreamConnected && !isTeacherHost && (
+            <div className="live-placeholder">
+              <div className="live-placeholder-icon">📺</div>
+              <p>{statusMessage || "Waiting for the classroom to open..."}</p>
+              {canJoin && (
+                <button
+                  type="button"
+                  className="btn btn-inline"
+                  style={{ marginTop: '20px' }}
+                  onClick={joinLive}
+                  disabled={isJoining}
+                >
+                  {isJoining ? "Joining..." : "Join Class"}
+                </button>
+              )}
             </div>
-            <p className="meta-text">
-              Teacher streams use compact video constraints to stay friendlier
-              on weaker networks.
-            </p>
-            <p className="meta-text">
-              Socket: {isSocketConnected ? "Connected" : "Disconnected"}
-            </p>
-            <div className="action-row">
-              {isTeacherHost ? (
-                <>
+          )}
+
+          {isTeacherHost ? (
+            <video
+              ref={localVideoRef}
+              className="live-hero-video"
+              autoPlay
+              muted
+              playsInline
+            />
+          ) : (
+            <video
+              ref={remoteVideoRef}
+              className="live-hero-video"
+              autoPlay
+              playsInline
+              controls={isStreamConnected}
+              style={{ display: isStreamConnected ? 'block' : 'none' }}
+            />
+          )}
+
+          <div className="live-controls-overlay">
+            {isTeacherHost ? (
+              <>
+                {!session?.isActive ? (
                   <button
                     type="button"
                     className="btn btn-inline"
                     onClick={startLive}
-                    disabled={isStarting || session?.isActive}
+                    disabled={isStarting}
                   >
-                    {isStarting ? "Starting..." : "Go Live"}
+                    {isStarting ? "Initializing..." : "🚀 Go Live"}
                   </button>
+                ) : (
                   <button
                     type="button"
-                    className="btn btn-secondary btn-inline"
+                    className="btn btn-danger-soft btn-inline"
                     onClick={stopLive}
-                    disabled={isStopping || !session?.isActive}
+                    disabled={isStopping}
                   >
-                    {isStopping ? "Stopping..." : "Stop Live"}
+                    {isStopping ? "Stopping..." : "🛑 End Session"}
                   </button>
-                </>
-              ) : isAuthenticated ? (
-                <button
-                  type="button"
-                  className="btn btn-inline"
-                  onClick={joinLive}
-                  disabled={!canJoin || isJoining}
-                >
-                  {isJoining
-                    ? "Joining..."
-                    : canJoin
-                      ? "Join Live Class"
-                      : "Class Offline"}
-                </button>
-              ) : null}
-            </div>
-          </article>
-
-          {isTeacherHost ? (
-            <article className="dashboard-card">
-              <div className="builder-header">
-                <div>
-                  <span className="card-badge">Teacher Feed</span>
-                  <h3>Your outgoing stream</h3>
-                </div>
-                {localReady ? <span className="meta-pill">Camera active</span> : null}
-              </div>
-              <video
-                ref={localVideoRef}
-                className="lecture-video live-video"
-                autoPlay
-                muted
-                playsInline
-              />
-            </article>
-          ) : (
-            <article className="dashboard-card">
-              <div className="builder-header">
-                <div>
-                  <span className="card-badge">Student Feed</span>
-                  <h3>Live teacher stream</h3>
-                </div>
-                {session?.isActive ? <span className="meta-pill">Connected when stream starts</span> : null}
-              </div>
-              <video
-                ref={remoteVideoRef}
-                className="lecture-video live-video"
-                autoPlay
-                playsInline
-                controls
-              />
-              {!isStreamConnected ? (
-                <p className="meta-text">
-                  Stream not connected yet. If this persists, ask the teacher to
-                  keep the live page open and click Go Live again.
-                </p>
-              ) : null}
-            </article>
-          )}
+                )}
+              </>
+            ) : (
+              <p className="meta-text" style={{ color: '#fff' }}>
+                {isStreamConnected ? "Viewing Live Stream" : "Viewer Mode"}
+              </p>
+            )}
+          </div>
         </div>
+
+        {statusMessage && !isTeacherHost && (
+          <p className="status-text" style={{ textAlign: 'center', marginTop: '10px' }}>
+            {statusMessage}
+          </p>
+        )}
       </section>
     </AppShell>
   );

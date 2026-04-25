@@ -12,7 +12,16 @@ import {
 const router = express.Router();
 
 router.get("/me", protect, (req, res) => {
-    res.json(req.user);
+    res.json({
+        id: req.user._id,
+        name: req.user.name,
+        email: req.user.email,
+        role: req.user.role,
+        bio: req.user.bio,
+        preferredMode: req.user.preferredMode,
+        streakCount: req.user.streakCount,
+        lastActiveAt: req.user.lastActiveAt,
+    });
 });
 router.put("/profile", protect, validate(validateProfileUpdate), updateProfile);
 router.post("/signup", validate(validateSignup), signup);

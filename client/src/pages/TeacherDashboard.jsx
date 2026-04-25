@@ -1,300 +1,131 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import API from "../api/api";
 import { useAuth } from "../app/useAuth";
-import AppShell from "../layouts/AppShell";
-
-const emptyCourseForm = {
-  title: "",
-  description: "",
-  category: "General",
-  level: "beginner",
-};
+import SidebarLayout from "../layouts/SidebarLayout";
 
 const TeacherDashboard = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [courses, setCourses] = useState([]);
-  const [courseForm, setCourseForm] = useState(emptyCourseForm);
-  const [editingCourseId, setEditingCourseId] = useState(null);
   const [analytics, setAnalytics] = useState(null);
-  const [error, setError] = useState("");
-  const [statusMessage, setStatusMessage] = useState("");
   const [loading, setLoading] = useState(true);
-  const maxCourseEnrollments = Math.max(
-    ...(analytics?.coursePerformance?.map((course) => course.enrollments) ?? [0]),
-    1
-  );
-
-  const fetchCourses = async () => {
-    setLoading(true);
-
-    try {
-      const response = await API.get("/courses/teacher/my-courses");
-      setCourses(response.data);
-      const analyticsResponse = await API.get("/analytics/teacher/overview");
-      setAnalytics(analyticsResponse.data);
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to load teacher courses");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    fetchCourses();
+    const fetchData = async () => {
+      try {
+        const [courseRes, analyticsRes] = await Promise.all([
+          API.get("/courses/teacher/my-courses"),
+          API.get("/analytics/teacher/overview")
+        ]);
+        setCourses(courseRes.data.slice(0, 3)); // Just show recent 3
+        setAnalytics(analyticsRes.data);
+      } catch (err) {
+        setError("Failed to sync your dashboard data.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
   }, []);
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    setError("");
-    setStatusMessage("");
-
-    try {
-      if (editingCourseId) {
-        await API.put(`/courses/${editingCourseId}`, courseForm);
-        setStatusMessage("Course updated successfully.");
-      } else {
-        await API.post("/courses", courseForm);
-        setStatusMessage("Course created successfully.");
-      }
-
-      setCourseForm(emptyCourseForm);
-      setEditingCourseId(null);
-      await fetchCourses();
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to save course");
-    }
-  };
-
-  const startEdit = (course) => {
-    setEditingCourseId(course._id);
-      setCourseForm({
-        title: course.title,
-        description: course.description,
-        category: course.category || "General",
-        level: course.level || "beginner",
-      });
-  };
-
-  const handleDelete = async (courseId) => {
-    setError("");
-    setStatusMessage("");
-
-    try {
-      await API.delete(`/courses/${courseId}`);
-      setStatusMessage("Course deleted successfully.");
-      await fetchCourses();
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to delete course");
-    }
-  };
+  const stats = [
+    { label: "Avg. Completion", value: `${analytics?.stats?.averageCompletion || 0}%`, icon: "📈", color: "green" },
+    { label: "Enrolled Students", value: analytics?.stats?.totalEnrollments || "0", icon: "👥", color: "blue" },
+    { label: "Course Rating", value: "4.8", icon: "⭐", color: "orange" },
+    { label: "Quiz Accuracy", value: `${analytics?.stats?.averageQuizScore || 0}%`, icon: "🎯", color: "purple" }
+  ];
 
   return (
-    <AppShell>
-      <section className="page-section">
-        <div className="section-heading">
-          <div>
-            <span className="eyebrow">Teacher Dashboard</span>
-            <h2>Teaching workspace for {user?.name}</h2>
-          </div>
-          <p className="page-subtitle">
-            Create courses, organize modules, and shape the content your
-            students will follow.
-          </p>
-        </div>
-        {error ? <p className="form-error">{error}</p> : null}
-        {statusMessage ? <p className="status-text">{statusMessage}</p> : null}
-        <div className="dashboard-grid">
-          <article className="dashboard-card">
-            <h3>Total Courses</h3>
-            <p>{analytics?.stats?.totalCourses ?? 0}</p>
-          </article>
-          <article className="dashboard-card">
-            <h3>Total Enrollments</h3>
-            <p>{analytics?.stats?.totalEnrollments ?? 0}</p>
-          </article>
-          <article className="dashboard-card">
-            <h3>Average Quiz Score</h3>
-            <p>{analytics?.stats?.averageQuizScore ?? 0}%</p>
-          </article>
-          <article className="dashboard-card">
-            <h3>Hardest Quiz</h3>
-            <p>
-              {analytics?.hardestQuiz
-                ? `${analytics.hardestQuiz.title} (${analytics.hardestQuiz.averageScore}%)`
-                : "No quiz attempts yet"}
-            </p>
-          </article>
-        </div>
+    <SidebarLayout>
+      <div className="p-8 max-w-7xl mx-auto space-y-12">
+        
+        {/* Welcome Header */}
+        <header className="flex flex-wrap justify-between items-center gap-6">
+           <div className="space-y-2">
+              <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[10px] font-black rounded-full uppercase tracking-widest">Instructor Overview</span>
+              <h1 className="text-4xl font-bold text-gray-900 dark:text-white">Hello, {user?.name.split(' ')[0]} 👋</h1>
+              <p className="text-gray-500 dark:text-gray-400">Manage your academy and track your impact.</p>
+           </div>
+           <button 
+             onClick={() => navigate('/teacher/courses')}
+             className="px-8 py-4 bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold rounded-2xl shadow-2xl shadow-gray-900/20 hover:scale-105 transition-all"
+           >
+              Create New Course
+           </button>
+        </header>
 
-        {analytics?.coursePerformance?.length ? (
-          <article className="dashboard-card analytics-card">
-            <div className="builder-header">
-              <div>
-                <span className="card-badge">Course Performance</span>
-                <h3>Enrollment and score distribution</h3>
+        {/* Stats Section */}
+        <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+           {stats.map((stat, i) => (
+             <article key={i} className="bg-white dark:bg-[#1e1e1e] p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm group">
+                <div className={`w-12 h-12 rounded-2xl bg-${stat.color}-50 dark:bg-${stat.color}-900/20 flex items-center justify-center text-2xl mb-6 group-hover:scale-110 transition-transform`}>
+                   {stat.icon}
+                </div>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">{stat.label}</p>
+                <h3 className="text-3xl font-bold text-gray-900 dark:text-white">{stat.value}</h3>
+             </article>
+           ))}
+        </section>
+
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+           
+           {/* Recent Courses */}
+           <div className="xl:col-span-2 space-y-8">
+              <div className="flex justify-between items-center px-2">
+                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Recent Courses</h2>
+                 <Link to="/teacher/courses" className="text-blue-600 text-sm font-bold hover:underline">View All →</Link>
               </div>
-              <p className="meta-text">Top courses by learner activity</p>
-            </div>
-            <div className="analytics-list">
-              {analytics.coursePerformance.map((course) => (
-                <div key={course.courseId} className="analytics-row">
-                  <div>
-                    <strong>{course.title}</strong>
-                    <p className="meta-text">
-                      {course.modules} modules, {course.quizzes} quizzes
-                    </p>
-                  </div>
-                  <div className="analytics-bar-block">
-                    <div className="analytics-bar-track">
-                      <div
-                        className="analytics-bar-fill"
-                        style={{
-                          width: `${Math.max(
-                            12,
-                            Math.round((course.enrollments / maxCourseEnrollments) * 100)
-                          )}%`,
-                        }}
-                      />
-                    </div>
-                    <div className="analytics-inline-stats">
-                      <span>{course.enrollments} enrolled</span>
-                      <span>{course.averageScore}% avg score</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </article>
-        ) : null}
 
-        <div className="builder-layout">
-          <article className="dashboard-card">
-            <h3>{editingCourseId ? "Edit Course" : "Create Course"}</h3>
-            <form className="form-stack" onSubmit={handleSubmit}>
-              <input
-                className="input"
-                placeholder="Course title"
-                value={courseForm.title}
-                onChange={(event) =>
-                  setCourseForm((current) => ({
-                    ...current,
-                    title: event.target.value,
-                  }))
-                }
-              />
-              <textarea
-                className="input input-textarea"
-                placeholder="Course description"
-                value={courseForm.description}
-                onChange={(event) =>
-                  setCourseForm((current) => ({
-                    ...current,
-                    description: event.target.value,
-                  }))
-                }
-              />
-              <select
-                className="input"
-                value={courseForm.category}
-                onChange={(event) =>
-                  setCourseForm((current) => ({
-                    ...current,
-                    category: event.target.value,
-                  }))
-                }
-              >
-                <option value="General">General</option>
-                <option value="Programming">Programming</option>
-                <option value="Science">Science</option>
-                <option value="Mathematics">Mathematics</option>
-                <option value="Career">Career</option>
-              </select>
-              <select
-                className="input"
-                value={courseForm.level}
-                onChange={(event) =>
-                  setCourseForm((current) => ({
-                    ...current,
-                    level: event.target.value,
-                  }))
-                }
-              >
-                <option value="beginner">Beginner</option>
-                <option value="intermediate">Intermediate</option>
-                <option value="advanced">Advanced</option>
-              </select>
-              <div className="action-row">
-                <button type="submit" className="btn btn-inline">
-                  {editingCourseId ? "Update Course" : "Create Course"}
-                </button>
-                {editingCourseId ? (
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-inline"
-                    onClick={() => {
-                      setEditingCourseId(null);
-                      setCourseForm(emptyCourseForm);
-                    }}
-                  >
-                    Cancel
-                  </button>
-                ) : null}
+              {loading ? (
+                <div className="space-y-4">
+                   {[1,2,3].map(i => <div key={i} className="h-24 bg-gray-100 dark:bg-gray-800 rounded-3xl animate-pulse" />)}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                   {courses.map(course => (
+                     <div key={course._id} className="bg-white dark:bg-[#1e1e1e] p-6 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm flex items-center justify-between group hover:shadow-lg transition-all">
+                        <div className="flex items-center gap-6">
+                           <div className="w-14 h-14 bg-gray-50 dark:bg-gray-800 rounded-2xl flex items-center justify-center text-2xl">📖</div>
+                           <div>
+                              <h4 className="font-bold text-gray-900 dark:text-white group-hover:text-blue-600 transition-colors">{course.title}</h4>
+                              <p className="text-xs text-gray-400 mt-1 uppercase font-bold tracking-widest">{course.category || "General"}</p>
+                           </div>
+                        </div>
+                        <div className="flex gap-3">
+                           <button onClick={() => navigate(`/teacher/courses/${course._id}`)} className="px-4 py-2 bg-gray-50 dark:bg-gray-800 text-gray-500 text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-blue-600 hover:text-white transition-all">Manage</button>
+                        </div>
+                     </div>
+                   ))}
+                   {courses.length === 0 && <p className="text-center py-12 text-gray-400 italic">No courses created yet.</p>}
+                </div>
+              )}
+           </div>
+
+           {/* Quick Actions / Activity */}
+           <div className="space-y-8">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white px-2">Quick Actions</h2>
+              <div className="bg-white dark:bg-[#1e1e1e] p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm space-y-4">
+                 <button className="w-full p-4 bg-blue-50 dark:bg-blue-900/10 text-blue-600 rounded-2xl font-bold text-sm text-left hover:bg-blue-100 transition-all flex items-center gap-4">
+                    <span>📢</span> Post Announcement
+                 </button>
+                 <button 
+                  onClick={() => navigate('/teacher/students')}
+                  className="w-full p-4 bg-purple-50 dark:bg-purple-900/10 text-purple-600 rounded-2xl font-bold text-sm text-left hover:bg-purple-100 transition-all flex items-center gap-4"
+                 >
+                    <span>👥</span> Message Students
+                 </button>
+                 <button className="w-full p-4 bg-green-50 dark:bg-green-900/10 text-green-600 rounded-2xl font-bold text-sm text-left hover:bg-green-100 transition-all flex items-center gap-4">
+                    <span>📄</span> Bulk Grade Upload
+                 </button>
               </div>
-            </form>
-          </article>
+           </div>
 
-          <div className="stack-list">
-            {loading ? <p className="status-text">Loading courses...</p> : null}
-            {courses.map((course) => (
-              <article key={course._id} className="dashboard-card">
-                <span className="card-badge">Course</span>
-                <h3>{course.title}</h3>
-                <p>{course.description}</p>
-                <div className="course-meta-row">
-                  <span className="meta-pill">{course.category || "General"}</span>
-                  <span className="meta-pill">{course.level || "beginner"}</span>
-                </div>
-                <div className="action-row">
-                  <Link
-                    to={`/teacher/courses/${course._id}`}
-                    className="btn btn-inline"
-                  >
-                    Manage Content
-                  </Link>
-                  <Link
-                    to={`/course/${course._id}/live`}
-                    className="btn btn-secondary btn-inline"
-                  >
-                    {course.liveSession?.isActive ? "Join Live" : "Go Live"}
-                  </Link>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-inline"
-                    onClick={() => startEdit(course)}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-inline"
-                    onClick={() => handleDelete(course._id)}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </article>
-            ))}
-            {!loading && courses.length === 0 ? (
-              <article className="dashboard-card">
-                <h3>No courses yet</h3>
-                <p>Create your first course to begin building content.</p>
-              </article>
-            ) : null}
-          </div>
         </div>
-      </section>
-    </AppShell>
+
+      </div>
+    </SidebarLayout>
   );
 };
 

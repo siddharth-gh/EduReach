@@ -59,7 +59,7 @@ const courseSchema = new mongoose.Schema(
             },
             mode: {
                 type: String,
-                enum: ["webrtc"],
+                enum: ["webrtc", "videosdk"],
                 default: "webrtc",
             },
         },

@@ -1,56 +1,35 @@
-# =========================
-# Node modules (both client & server)
-# =========================
+# Dependencies
+node_modules/
 client/node_modules/
 server/node_modules/
-node_modules/
 
-# =========================
+# Environment Variables
+.env
+client/.env
+server/.env
+.env.local
+.env.*.local
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
 # Logs
-# =========================
-logs/
-*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# =========================
-# Environment variables
-# =========================
-.env
-.env.*
-client/.env
-server/.env
-
-# =========================
-# Build folders
-# =========================
-client/build/
+# Build Outputs
 client/dist/
-server/build/
-server/dist/
+dist/
 
-# =========================
-# OS files
-# =========================
-.DS_Store
-Thumbs.db
-
-# =========================
-# IDE / Editor folders
-# =========================
-.vscode/
-.idea/
-
-# =========================
-# Server uploads (DO NOT upload)
-# =========================
+# Local Uploads
 server/uploads/
+uploads/
 
-# =========================
-# Misc
-# =========================
-*.tmp
-*.temp
-.cache/
-coverage/
+# Optional: Ignore temp files
+.tempmediaStorage/
+.gemini/

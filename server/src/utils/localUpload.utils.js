@@ -100,6 +100,13 @@ export const resolveUploadUrlToPath = (uploadUrl) => {
     }
 };
 
+const isFfmpegAvailable = () =>
+    new Promise((resolve) => {
+        const check = spawn("ffmpeg", ["-version"], { windowsHide: true });
+        check.on("error", () => resolve(false));
+        check.on("close", (code) => resolve(code === 0));
+    });
+
 const runFfmpeg = (args) =>
     new Promise((resolve, reject) => {
         const process = spawn("ffmpeg", args, {
@@ -139,6 +146,30 @@ export const optimizeVideoLocally = async ({
     const optimizedPath = path.join(folders.videosOptimized, optimizedFilename);
     const audioPath = path.join(folders.videosAudio, audioFilename);
     const thumbnailPath = path.join(folders.thumbnails, thumbnailFilename);
+
+    const hasFfmpeg = await isFfmpegAvailable();
+
+    if (!hasFfmpeg) {
+        console.warn("FFmpeg not found. Skipping video optimization and using original file.");
+        
+        // In a real fallback, we might not have a thumbnail or audio file.
+        // We'll copy the source to optimizedPath just to keep the contract, 
+        // though usually we'd just point the DB to the original.
+        await fs.copyFile(sourcePath, optimizedPath);
+        
+        // Return fallback object
+        return {
+            optimizedFilename,
+            optimizedPath,
+            optimizedBytes: (await fs.stat(sourcePath)).size,
+            audioFilename: "",
+            audioPath: "",
+            audioBytes: 0,
+            thumbnailFilename: "",
+            thumbnailPath: "",
+            thumbnailBytes: 0,
+        };
+    }
 
     onProgress?.({
         progress: 45,

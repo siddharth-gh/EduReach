@@ -1,6 +1,12 @@
+import "../config/env.js";
 import { GoogleGenAI } from "@google/genai";
 
-const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const DEFAULT_GOOGLE_AI_MODEL =
+    process.env.GOOGLE_AI_MODEL ||
+    process.env.GEMMA_MODEL ||
+    process.env.AI_CHAT_MODEL ||
+    process.env.GEMINI_MODEL ||
+    "gemma-3-27b-it";
 
 const extractJson = (value) => {
     if (!value) {
@@ -78,7 +84,7 @@ export const generateLectureSummary = async ({
     try {
         const client = getClient();
         const response = await client.models.generateContent({
-            model: DEFAULT_GEMINI_MODEL,
+            model: DEFAULT_GOOGLE_AI_MODEL,
             contents: `You are helping learners in low-connectivity environments.
 
 Course: ${courseTitle}
@@ -101,9 +107,10 @@ Rules:
 - Be accurate to the provided lecture context only.
 - Keep language student-friendly.
 - Keep keyPoints practical and short.
-- Do not include markdown.`,
+- Do not include markdown.
+- Return valid JSON only.`,
             config: {
-                responseMimeType: "application/json",
+                temperature: 0.2,
             },
         });
 
@@ -143,7 +150,7 @@ export const generateLectureAssistantReply = async ({
             .join("\n");
 
         const response = await client.models.generateContent({
-            model: DEFAULT_GEMINI_MODEL,
+            model: DEFAULT_GOOGLE_AI_MODEL,
             contents: `You are an educational assistant for a lecture.
 
 Course: ${courseTitle}
@@ -178,9 +185,10 @@ Rules:
 - If the user asks for MCQs, generate 3 or 4 good ones.
 - If the user asks a normal doubt, still include 1 or 2 MCQs when useful.
 - Do not use markdown.
-- Make options plausible and non-duplicative.`,
+- Make options plausible and non-duplicative.
+- Return valid JSON only.`,
             config: {
-                responseMimeType: "application/json",
+                temperature: 0.2,
             },
         });
 

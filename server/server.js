@@ -1,11 +1,17 @@
 import dotenv from "dotenv";
 import { createServer } from "http";
+import path from "path";
 import { Server } from "socket.io";
+import { fileURLToPath } from "url";
 import app from "./src/app.js";
 import connectDB from "./src/config/db.js";
 import { registerLiveSocketHandlers } from "./src/socket/live.socket.js";
 
-dotenv.config();
+const serverDir = path.dirname(fileURLToPath(import.meta.url));
+
+dotenv.config({
+    path: path.join(serverDir, ".env"),
+});
 
 const requiredEnvVars = ["MONGO_URI", "JWT_SECRET"];
 

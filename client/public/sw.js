@@ -1,6 +1,7 @@
 const STATIC_CACHE = "edureach-static-v2";
 const RUNTIME_CACHE = "edureach-runtime-v1";
 const API_CACHE = "edureach-api-v1";
+const OFFLINE_CACHE = "edureach-offline-v1";
 
 const APP_SHELL = [
   "/",
@@ -21,7 +22,7 @@ self.addEventListener("install", (event) => {
 });
 
 self.addEventListener("activate", (event) => {
-  const validCaches = [STATIC_CACHE, RUNTIME_CACHE, API_CACHE];
+  const validCaches = [STATIC_CACHE, RUNTIME_CACHE, API_CACHE, OFFLINE_CACHE];
 
   event.waitUntil(
     caches.keys().then((cacheNames) =>
@@ -66,16 +67,22 @@ const networkFirst = async (request, cacheName, fallbackUrl) => {
   }
 };
 
-const staleWhileRevalidate = async (request, cacheName) => {
-  const cache = await caches.open(cacheName);
-  const cached = await cache.match(request);
+const staleWhileRevalidate = async (request, cacheNames) => {
+  const names = Array.isArray(cacheNames) ? cacheNames : [cacheNames];
+  let cached = null;
+
+  for (const name of names) {
+    const cache = await caches.open(name);
+    cached = await cache.match(request);
+    if (cached) break;
+  }
 
   const fetchPromise = fetch(request)
-    .then((response) => {
+    .then(async (response) => {
       if (response.ok || response.type === "opaque") {
+        const cache = await caches.open(names[0]);
         cache.put(request, response.clone());
       }
-
       return response;
     })
     .catch(() => cached);
@@ -108,6 +115,6 @@ self.addEventListener("fetch", (event) => {
     request.destination === "image" ||
     request.destination === "font"
   ) {
-    event.respondWith(staleWhileRevalidate(request, RUNTIME_CACHE));
+    event.respondWith(staleWhileRevalidate(request, [RUNTIME_CACHE, OFFLINE_CACHE]));
   }
 });

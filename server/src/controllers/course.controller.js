@@ -178,14 +178,19 @@ export const startCourseLiveSession = asyncHandler(async (req, res) => {
         res.status(403);
         throw new Error("Not authorized to start this live session");
     }
+    console.log("[Backend] /live/start called by", req.user.email, "with body:", req.body);
+
+    const providedRoomId = req.body.roomId;
 
     course.liveSession = {
         isActive: true,
-        roomId: course.liveSession?.roomId || crypto.randomUUID(),
+        roomId: providedRoomId || course.liveSession?.roomId || crypto.randomUUID(),
         startedAt: new Date(),
         startedBy: req.user._id,
-        mode: "webrtc",
+        mode: providedRoomId ? "videosdk" : "webrtc",
     };
+
+    console.log("[Backend] Saved liveSession:", course.liveSession);
 
     await course.save();
 
@@ -210,10 +215,10 @@ export const stopCourseLiveSession = asyncHandler(async (req, res) => {
 
     course.liveSession = {
         isActive: false,
-        roomId: course.liveSession?.roomId || "",
+        roomId: "",
         startedAt: null,
         startedBy: null,
-        mode: "webrtc",
+        mode: "videosdk",
     };
 
     await course.save();

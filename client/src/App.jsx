@@ -11,10 +11,14 @@ import CertificatePage from "./pages/CertificatePage";
 import Dashboard from "./pages/Dashboard";
 import Profile from "./pages/Profile";
 import TeacherDashboard from "./pages/TeacherDashboard";
+import TeacherCourses from "./pages/TeacherCourses";
+import TeacherStudents from "./pages/TeacherStudents";
+import TeacherAnalytics from "./pages/TeacherAnalytics";
+import TeacherProfile from "./pages/TeacherProfile";
 import TeacherCourseBuilder from "./pages/TeacherCourseBuilder";
 import AdminDashboard from "./pages/AdminDashboard";
 import NotFound from "./pages/NotFound";
-import LiveClassroom from "./pages/LiveClassroom";
+import VideoSDKClassroom from "./pages/VideoSDKClassroom";
 import OfflineLibrary from "./pages/OfflineLibrary";
 import ProtectedRoute from "./routes/ProtectedRoute";
 import RoleRoute from "./routes/RoleRoute";
@@ -31,7 +35,7 @@ function App() {
         <Route path="/lecture/:lectureId" element={<LectureViewer />} />
         <Route path="/offline" element={<OfflineLibrary />} />
         <Route element={<ProtectedRoute />}>
-          <Route path="/course/:courseId/live" element={<LiveClassroom />} />
+          <Route path="/course/:courseId/live" element={<VideoSDKClassroom />} />
         </Route>
         <Route element={<ProtectedRoute />}>
           <Route path="/quiz/:quizId" element={<QuizAttempt />} />
@@ -44,6 +48,10 @@ function App() {
         </Route>
         <Route element={<RoleRoute allowedRoles={["teacher", "admin"]} />}>
           <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
+          <Route path="/teacher/courses" element={<TeacherCourses />} />
+          <Route path="/teacher/students" element={<TeacherStudents />} />
+          <Route path="/teacher/analytics" element={<TeacherAnalytics />} />
+          <Route path="/teacher/profile" element={<TeacherProfile />} />
           <Route
             path="/teacher/courses/:courseId"
             element={<TeacherCourseBuilder />}
