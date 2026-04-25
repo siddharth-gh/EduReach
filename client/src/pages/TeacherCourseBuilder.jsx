@@ -166,6 +166,23 @@ const TeacherCourseBuilder = () => {
   };
 
   useEffect(() => { fetchCourseData(); }, [courseId]);
+  
+  const startModuleEdit = (m) => {
+    setModuleForm({ title: m.title, order: m.order });
+    setEditingModuleId(m._id);
+    // Scroll to the add module form
+    document.querySelector('aside')?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const updateLectureForm = (moduleId, field, value) => {
+    setLectureForms(curr => ({
+      ...curr,
+      [moduleId]: {
+        ...(curr[moduleId] || emptyLectureForm),
+        [field]: value
+      }
+    }));
+  };
 
   const handleModuleSubmit = async (e) => {
     e.preventDefault();
