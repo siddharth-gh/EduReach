@@ -29,10 +29,7 @@ export const AuthProvider = ({ children }) => {
       return;
     }
 
-    if (user) {
-      return;
-    }
-
+    // Always fetch fresh user data on mount/refresh to stay in sync with DB
     API.get("/auth/me")
       .then((response) => {
         setUser(response.data);
@@ -44,7 +41,7 @@ export const AuthProvider = ({ children }) => {
         setToken(null);
         setUser(null);
       });
-  }, [token, user]);
+  }, [token]);
 
   const persistSession = useCallback((nextToken, nextUser) => {
     localStorage.setItem("token", nextToken);

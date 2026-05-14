@@ -5,11 +5,11 @@ import asyncHandler from "../utils/asyncHandler.js";
 const protect = asyncHandler(async (req, res, next) => {
     let token;
 
-    if (
-        req.headers.authorization &&
-        req.headers.authorization.startsWith("Bearer")
-    ) {
-        token = req.headers.authorization.split(" ")[1];
+    if (req.headers.authorization) {
+        const parts = req.headers.authorization.split(" ");
+        if (parts.length === 2 && parts[0].toLowerCase() === "bearer") {
+            token = parts[1];
+        }
     }
 
     if (!token) {
@@ -33,6 +33,31 @@ const protect = asyncHandler(async (req, res, next) => {
     }
 
     req.user = user;
+    next();
+});
+
+export const optionalProtect = asyncHandler(async (req, res, next) => {
+    let token;
+
+    if (req.headers.authorization) {
+        const parts = req.headers.authorization.split(" ");
+        if (parts.length === 2 && parts[0].toLowerCase() === "bearer") {
+            token = parts[1];
+        }
+    }
+
+    if (token) {
+        try {
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            const user = await User.findById(decoded.id).select("-password");
+            if (user) {
+                req.user = user;
+            }
+        } catch (err) {
+            // Silently ignore invalid tokens in optional auth
+            console.error("Optional auth token verification failed:", err.message);
+        }
+    }
     next();
 });
 

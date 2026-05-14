@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const getBaseURL = () => {
-  const PROD_URL = "http://34.204.170.9:5000/api";
+  const PROD_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
   let url = PROD_URL;
   if (!url.endsWith("/api") && !url.endsWith("/api/")) {
     url = url.endsWith("/") ? `${url}api` : `${url}/api`;

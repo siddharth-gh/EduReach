@@ -1,9 +1,6 @@
 import asyncHandler from "../utils/asyncHandler.js";
 import jwt from "jsonwebtoken";
 import axios from "axios";
-import dotenv from "dotenv";
-
-dotenv.config();
 
 /**
  * @desc Get VideoSDK Token

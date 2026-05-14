@@ -40,6 +40,13 @@ router.post(
 );
 
 router.get(
+    "/status/:jobId",
+    protect,
+    authorizeRoles("teacher", "admin"),
+    getUploadVideoStatus
+);
+
+router.get(
     "/video/status/:jobId",
     protect,
     authorizeRoles("teacher", "admin"),

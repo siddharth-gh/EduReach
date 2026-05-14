@@ -1,7 +1,7 @@
 import API from "../api/api";
 
-const OFFLINE_CACHE = "edureach-offline-v1";
-const OFFLINE_INDEX_KEY = "edureach_offline_courses";
+const OFFLINE_CACHE = "remotesmart-offline-v2";
+const OFFLINE_INDEX_KEY = "remotesmart_offline_courses_v2";
 
 const normalizeResourceType = (resource) => {
   if (resource?.type) {

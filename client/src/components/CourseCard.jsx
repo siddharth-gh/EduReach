@@ -1,43 +1,65 @@
 const CourseCard = ({ course, onClick }) => {
-  const { title, description, teacherId, category, level, downloaded } = course || {};
+  const { title, description, teacherId, category, level, downloaded, averageRating } = course || {};
   const teacherName = teacherId?.name || "Instructor";
 
   return (
     <article 
-      className="group bg-white dark:bg-gray-900 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 p-8 hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] dark:hover:shadow-[0_20px_50px_rgba(0,0,0,0.2)] transition-all duration-300 cursor-pointer overflow-hidden relative flex flex-col justify-between h-full"
+      className="group bg-surface rounded-[2rem] border border-border p-6 hover:shadow-[0_32px_64px_rgba(0,0,0,0.08)] dark:hover:shadow-[0_32px_64px_rgba(0,0,0,0.3)] transition-all duration-500 cursor-pointer overflow-hidden relative flex flex-col h-full active:scale-[0.98]"
       onClick={onClick}
     >
-      <div className="relative z-10 space-y-4">
+      <div className="relative z-10 flex flex-col h-full space-y-4">
+        
+        {/* Header: Badges */}
         <div className="flex justify-between items-start">
-           <span className="inline-block px-3 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[9px] font-black rounded-full uppercase tracking-widest">
-             {category || "General"}
-           </span>
+           <div className="flex flex-wrap gap-2">
+             <span className="inline-block px-3 py-1 bg-accent-soft text-accent text-[9px] font-bold rounded-full uppercase tracking-widest border border-accent/10">
+               {category || "General"}
+             </span>
+             {averageRating > 0 && (
+               <span className="inline-block px-3 py-1 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400 text-[9px] font-bold rounded-full uppercase tracking-widest flex items-center gap-1.5 border border-yellow-200/50 dark:border-yellow-700/30">
+                 ⭐ {averageRating}
+               </span>
+             )}
+           </div>
            {downloaded && (
-             <span className="w-6 h-6 bg-green-100 dark:bg-green-900/30 text-green-600 rounded-full flex items-center justify-center text-xs">✓</span>
+             <div className="w-7 h-7 bg-success/10 text-success rounded-lg flex items-center justify-center text-xs shadow-sm border border-success/10">
+                ✓
+             </div>
            )}
         </div>
         
-        <h3 className="text-xl font-bold text-gray-900 dark:text-white leading-tight group-hover:text-blue-600 transition-colors">
-          {title}
-        </h3>
-        
-        <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed">
-          {description}
-        </p>
-      </div>
-
-      <div className="relative z-10 pt-8 mt-auto flex items-center justify-between">
-        <div className="flex items-center gap-3">
-           <div className="w-8 h-8 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center text-[10px] font-bold text-gray-400 uppercase">
-              {teacherName.charAt(0)}
-           </div>
-           <p className="text-xs font-bold text-gray-400 uppercase tracking-tighter">{teacherName}</p>
+        {/* Body: Title & Desc */}
+        <div className="space-y-2">
+          <h3 className="text-xl font-bold text-primary leading-tight group-hover:text-accent transition-colors duration-300">
+            {title}
+          </h3>
+          <p className="text-xs text-secondary line-clamp-3 leading-relaxed opacity-80 group-hover:opacity-100 transition-opacity">
+            {description}
+          </p>
         </div>
-        <span className="text-[10px] font-black text-gray-200 dark:text-gray-700 uppercase tracking-widest group-hover:text-blue-600 transition-colors">Details</span>
+        
+        {/* Footer: Instructor & CTA */}
+        <div className="pt-6 mt-auto flex items-center justify-between border-t border-border/50">
+          <div className="flex items-center gap-3">
+             <div className="w-10 h-10 bg-surface-soft border border-border rounded-2xl flex items-center justify-center text-xs font-bold text-accent uppercase group-hover:bg-accent group-hover:text-white transition-all duration-500">
+                {teacherName.charAt(0)}
+             </div>
+             <div className="flex flex-col">
+                <span className="text-[10px] font-bold text-secondary uppercase tracking-widest">Instructor</span>
+                <p className="text-xs font-bold text-primary">{teacherName}</p>
+             </div>
+          </div>
+          
+          <div className="w-10 h-10 rounded-2xl bg-surface-soft flex items-center justify-center text-secondary group-hover:bg-accent group-hover:text-white group-hover:translate-x-1 transition-all duration-500">
+             <svg className="w-4 h-4 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+                <path d="M5 12h14m-7-7l7 7-7 7" />
+             </svg>
+          </div>
+        </div>
       </div>
 
-      {/* Subtle Background Accent */}
-      <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/5 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:bg-blue-600/10 transition-colors duration-500" />
+      {/* Modern Background Gradient Blur */}
+      <div className="absolute -bottom-24 -right-24 w-64 h-64 bg-accent/5 rounded-full blur-3xl pointer-events-none group-hover:bg-accent/10 transition-colors duration-700" />
     </article>
   );
 };

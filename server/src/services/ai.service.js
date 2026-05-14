@@ -1,5 +1,5 @@
 import "../config/env.js";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const DEFAULT_GOOGLE_AI_MODEL =
     process.env.GOOGLE_AI_MODEL ||
@@ -36,43 +36,97 @@ const getGeminiClient = () => {
         throw new Error("GEMINI_API_KEY is not configured");
     }
 
-    if (typeof GoogleGenAI !== 'function' && typeof GoogleGenAI !== 'object') {
-        console.error("GoogleGenAI is not properly imported. Check your @google/genai package.");
+    if (typeof GoogleGenerativeAI !== 'function' && typeof GoogleGenerativeAI !== 'object') {
+        console.error("GoogleGenerativeAI is not properly imported. Check your @google/generative-ai package.");
         throw new Error("AI SDK not found");
     }
 
-    return new GoogleGenAI({
-        apiKey: process.env.GEMINI_API_KEY,
-    });
+    return new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 };
 
 const extractJson = (text) => {
+    if (!text) return null;
+    
+    let cleanText = text.trim();
+    
     try {
-        console.log("[AI Service] Raw text for extraction (first 100 chars):", text.substring(0, 100));
-        // Find JSON block more aggressively
-        const jsonMatch = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
-        if (jsonMatch) {
-            const clean = jsonMatch[0];
-            return JSON.parse(clean);
+        // 1. Strip markdown code blocks
+        cleanText = cleanText.replace(/```json\s?|```/g, "").trim();
+        
+        // 2. Find the JSON object/array boundaries
+        const firstBrace = cleanText.indexOf('{');
+        const lastBrace = cleanText.lastIndexOf('}');
+        const firstBracket = cleanText.indexOf('[');
+        const lastBracket = cleanText.lastIndexOf(']');
+        
+        let start = -1;
+        let end = -1;
+        
+        if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+            start = firstBrace;
+            end = lastBrace;
+        } else if (firstBracket !== -1) {
+            start = firstBracket;
+            end = lastBracket;
         }
-        return JSON.parse(text);
+        
+        if (start !== -1 && end !== -1 && end > start) {
+            cleanText = cleanText.substring(start, end + 1);
+        }
+        
+        // 3. Handle common JSON artifacts like trailing commas
+        const sanitized = cleanText
+            .replace(/,\s*([\]}])/g, '$1') // Trailing commas
+            .replace(/(\r\n|\n|\r)/gm, " "); // Newlines inside strings (best effort)
+
+        return JSON.parse(sanitized);
     } catch (error) {
-        console.error("[AI Service] JSON Extraction failed. Raw text was:", text);
-        throw new Error("Failed to parse AI response as JSON");
+        // Fallback to original text if sanitization failed or first attempt failed
+        try {
+            return JSON.parse(cleanText);
+        } catch (innerError) {
+            console.error("[AI Service] JSON Extraction failed. Raw text was:", text);
+            throw new Error("Failed to parse AI response as JSON: " + innerError.message);
+        }
     }
 };
 
-export const generateWithGemini = async (prompt) => {
+export const generateWithGemini = async (prompt, schema = null, options = {}) => {
     try {
         const client = getGeminiClient();
-        const model = client.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-1.5-flash" });
         
-        const contents = [{ role: 'user', parts: [{ text: prompt }] }];
-        const result = await model.generateContent({ contents });
+        // Priority: options.model > process.env.GEMINI_MODEL > default
+        const modelName = options.model || process.env.GEMINI_MODEL || "gemini-1.5-flash";
+        const model = client.getGenerativeModel({ model: modelName });
+        
+        // Detect if the model supports native JSON mode (Gemini 1.5+)
+        const isGemini15 = modelName.includes("gemini-1.5");
+        
+        let finalPrompt = prompt;
+        let generationConfig = options.temperature ? { temperature: options.temperature } : {};
+
+        if (isGemini15) {
+            // Use native SDK features for Gemini 1.5
+            generationConfig.responseMimeType = "application/json";
+            if (schema) {
+                generationConfig.responseSchema = schema;
+            }
+        } else if (schema) {
+            // For Gemma/others, inject schema into prompt and rely on manual extraction
+            finalPrompt += `\n\nIMPORTANT: Your response must be a single valid JSON object strictly following this schema:\n${JSON.stringify(schema, null, 2)}\n\nDo not include any conversational text or markdown backticks if possible, just the raw JSON.`;
+        }
+
+        const contents = [{ role: 'user', parts: [{ text: finalPrompt }] }];
+
+        const result = await model.generateContent({ 
+            contents,
+            generationConfig
+        });
+        
         const response = await result.response;
         const text = response.text();
         
-        console.log("[AI Service] AI Response Text received. Length:", text.length);
+        // Use our robust extractor to handle the text output
         return extractJson(text);
     } catch (error) {
         console.error("[AI Service] Gemini Error:", error);
@@ -80,8 +134,8 @@ export const generateWithGemini = async (prompt) => {
     }
 };
 
-const generateJson = async (prompt) => {
-    return generateWithGemini(prompt);
+const generateJson = async (prompt, schema = null, options = {}) => {
+    return generateWithGemini(prompt, schema, options);
 };
 
 const isGeminiConfigured = () => Boolean(process.env.GEMINI_API_KEY);
@@ -128,7 +182,6 @@ Rules:
             },
         },
         required: ["summary", "keyPoints"],
-        additionalProperties: false,
     });
 
     return {
@@ -217,12 +270,10 @@ Rules:
                         explanation: { type: "string" },
                     },
                     required: ["question", "options", "correctAnswer", "explanation"],
-                    additionalProperties: false,
                 },
             },
         },
         required: ["reply", "mcqs"],
-        additionalProperties: false,
     }, {
         model: assistantModel,
         temperature: 0.2,
@@ -307,16 +358,12 @@ Rules:
         properties: {
             questions: {
                 type: "array",
-                minItems: count,
-                maxItems: count,
                 items: {
                     type: "object",
                     properties: {
                         question: { type: "string" },
                         options: {
                             type: "array",
-                            minItems: 4,
-                            maxItems: 4,
                             items: { type: "string" },
                         },
                         correctAnswer: { type: "number" },
@@ -334,12 +381,10 @@ Rules:
                         "concept",
                         "learningObjective",
                     ],
-                    additionalProperties: false,
                 },
             },
         },
         required: ["questions"],
-        additionalProperties: false,
     });
 
     const difficulties = ["easy", "medium", "hard"];

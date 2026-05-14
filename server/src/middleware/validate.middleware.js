@@ -9,6 +9,8 @@ export const validate = (validator) => (req, res, next) => {
     const result = validator(req);
 
     if (result.errors.length > 0) {
+        console.error("[Validation Error] Payload:", JSON.stringify(req.body, null, 2));
+        console.error("[Validation Error] Errors:", result.errors);
         return next(buildValidationError(result.errors));
     }
 

@@ -2,6 +2,20 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+@theme {
+  --color-background: var(--bg-main);
+  --color-surface: var(--bg-surface);
+  --color-primary: var(--text-primary);
+  --color-secondary: var(--text-secondary);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-border: var(--border);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
+  --color-surface-soft: var(--surface-soft);
+  --color-surface-muted: var(--surface-muted);
+}
 /* Custom Scrollbar Utility */
 @layer utilities {
   .custom-scrollbar::-webkit-scrollbar {
@@ -29,100 +43,54 @@
 
 :root {
   color-scheme: light;
-  font-family: "Segoe UI", sans-serif;
+  font-family: 'Inter', sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  --bg-main:
-    radial-gradient(circle at top left, rgba(199, 216, 232, 0.35), transparent 32%),
-    linear-gradient(180deg, #f6f8fb 0%, #eef2f7 100%);
-  --text-primary: #1a2330;
-  --text-secondary: #5c6776;
-  --banner-primary-bg: #1b2b34;
-  --banner-primary-text: #f3f6fa;
-  --banner-secondary-bg: #e7edf4;
-  --banner-secondary-text: #1b2b34;
-  --accent-bg: #3b6ea8;
-  --accent-text: #ffffff;
-  --accent-soft-bg: #e6eef9;
-  --accent-soft-text: #2a4e76;
-  --card-bg: rgba(255, 255, 255, 0.9);
-  --card-border: rgba(26, 35, 48, 0.08);
-  --card-shadow: 0 18px 40px rgba(24, 34, 48, 0.08);
-  --outline-soft: #d7e0ea;
-  --outline-mid: #c3cfdd;
-  --surface-soft: #f2f5f9;
-  --surface-muted: #edf1f6;
-  --surface-pill: #e8eef6;
-  --surface-info: #ecf2fa;
-  --surface-quiz: #edf2fb;
-  --surface-panel: #f8fafc;
-  --surface-track: #d3dde8;
-  --surface-track-analytics: #dbe3ee;
-  --surface-input: #fbfcfe;
-  --surface-white: #ffffff;
-  --nav-text: #314156;
-  --brand-text: #1a2330;
-  --button-secondary-bg: #e8eef6;
-  --button-secondary-text: #2a3a52;
-  --danger-text: #b23b3b;
-  --success-text: #2b7a5d;
-  --lecture-video-bg: #0c1620;
-  color: var(--text-primary);
-  background: var(--bg-main);
+
+  --bg-main: #F9FAFB;
+  --bg-surface: #FFFFFF;
+  --text-primary: #111827;
+  --text-secondary: #4B5563;
+  --accent: #2563eb;
+  --accent-soft: rgba(37, 99, 235, 0.08);
+  --border: #E5E7EB;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --error: #ef4444;
+  --surface-soft: #F3F4F6;
+  --surface-muted: #E5E7EB;
+  
+  --card-radius: 24px;
+  --card-radius-lg: 48px;
 }
 
-:root[data-theme="dark"] {
+[data-theme="dark"],
+.dark {
   color-scheme: dark;
-  --bg-main:
-    radial-gradient(circle at top left, rgba(44, 67, 98, 0.35), transparent 30%),
-    linear-gradient(180deg, #0f141b 0%, #151c26 100%);
-  --text-primary: #eef2f7;
-  --text-secondary: #cbd5e1;
-  --banner-primary-bg: #131a22;
-  --banner-primary-text: #eef2f7;
-  --banner-secondary-bg: #1d2632;
-  --banner-secondary-text: #d7dee8;
-  --accent-bg: #5b88c6;
-  --accent-text: #0b1118;
-  --accent-soft-bg: #1e2b3b;
-  --accent-soft-text: #c9d7ea;
-  --card-bg: rgba(20, 27, 37, 0.94);
-  --card-border: rgba(148, 165, 185, 0.12);
-  --card-shadow: 0 20px 44px rgba(0, 0, 0, 0.32);
-  --outline-soft: #2a3646;
-  --outline-mid: #354356;
-  --surface-soft: #141d27;
-  --surface-muted: #17212c;
-  --surface-pill: #1b2735;
-  --surface-info: #182232;
-  --surface-quiz: #192434;
-  --surface-panel: #121a24;
-  --surface-track: #2a3848;
-  --surface-track-analytics: #2d3a4a;
-  --surface-input: #0f1722;
-  --surface-white: #0f1722;
-  --nav-text: #cfd7e3;
-  --brand-text: #f0f4f9;
-  --button-secondary-bg: #1e2a39;
-  --button-secondary-text: #d2dbe7;
-  --danger-text: #f2a0a0;
-  --success-text: #7fd1b6;
-  --lecture-video-bg: #02070f;
+  --bg-main: #0B0F19;
+  --bg-surface: #111827;
+  --text-primary: #FFFFFF;
+  --text-secondary: #94a3b8;
+  --accent: #2563eb;
+  --accent-soft: rgba(37, 99, 235, 0.2);
+  --border: #1F2937;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --error: #ef4444;
+  --surface-soft: #1f2937;
+  --surface-muted: #1f2937;
+}
+
+body {
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  margin: 0;
+  transition: background-color 0.2s, color 0.2s;
 }
 
 * {
   box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
-  color: var(--text-primary);
-  background: var(--bg-main);
-  transition:
-    background 0.45s ease-in-out,
-    color 0.45s ease-in-out;
 }
 
 a {

@@ -141,6 +141,10 @@ const lectureSchema = new mongoose.Schema(
             required: true,
             trim: true,
         },
+        videoJobId: {
+            type: String,
+            default: "",
+        },
 
         order: {
             type: Number,
@@ -163,7 +167,7 @@ const lectureSchema = new mongoose.Schema(
                 },
                 type: {
                     type: String,
-                    enum: ["pdf", "text", "file"],
+                    enum: ["pdf", "ppt", "pptx", "docx", "doc", "text", "file"],
                     default: "file",
                 },
                 originalFilename: {
@@ -305,6 +309,15 @@ const lectureSchema = new mongoose.Schema(
                 trim: true,
                 default: "",
             },
+        },
+        videoJobId: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+        isPublished: {
+            type: Boolean,
+            default: false,
         },
     },
     {

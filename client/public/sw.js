@@ -1,7 +1,7 @@
-const STATIC_CACHE = "edureach-static-v2";
-const RUNTIME_CACHE = "edureach-runtime-v1";
-const API_CACHE = "edureach-api-v1";
-const OFFLINE_CACHE = "edureach-offline-v1";
+const STATIC_CACHE = "remotesmart-static-v3";
+const RUNTIME_CACHE = "remotesmart-runtime-v2";
+const API_CACHE = "remotesmart-api-v2";
+const OFFLINE_CACHE = "remotesmart-offline-v2";
 
 const APP_SHELL = [
   "/",

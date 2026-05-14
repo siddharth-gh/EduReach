@@ -9,6 +9,8 @@ import {
     stopCourseLiveSession,
     updateCourse,
     deleteCourse,
+    rateCourse,
+    scheduleLiveSession,
 } from "../controllers/course.controller.js";
 import protect from "../middleware/auth.middleware.js";
 import authorizeRoles from "../middleware/role.middleware.js";
@@ -65,6 +67,14 @@ router.put(
     validateObjectIdParams("id"),
     validate(validateCourseUpdate),
     updateCourse
+);
+router.post("/:id/rate", protect, validateObjectIdParams("id"), rateCourse);
+router.post(
+    "/:id/schedule-live",
+    protect,
+    authorizeRoles("teacher", "admin"),
+    validateObjectIdParams("id"),
+    scheduleLiveSession
 );
 
 // delete (teacher/admin)

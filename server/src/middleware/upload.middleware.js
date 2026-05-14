@@ -50,7 +50,7 @@ export const uploadLectureResource = createUploader(
         "application/vnd.ms-powerpoint",
         "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     ],
-    10 * 1024 * 1024
+    100 * 1024 * 1024
 ).single("file");
 
 export const uploadLectureVideo = createUploader(

@@ -1,6 +1,7 @@
 import Course from "../models/course.model.js";
 import Module from "../models/module.model.js";
 import Quiz from "../models/quiz.model.js";
+import Lecture from "../models/lecture.model.js";
 import asyncHandler from "../utils/asyncHandler.js";
 
 const sanitizeQuizForStudent = (quiz) => {
@@ -79,9 +80,48 @@ export const createQuiz = asyncHandler(async (req, res) => {
 });
 
 export const getQuizzesByModule = asyncHandler(async (req, res) => {
-    const quizzes = await Quiz.find({ moduleId: req.params.moduleId }).sort({
-        createdAt: -1,
-    });
+    const moduleId = req.params.moduleId;
+    const module = await Module.findById(moduleId);
+    if (!module) {
+        res.status(404);
+        throw new Error("Module not found");
+    }
+
+    const course = await Course.findById(module?.courseId);
+
+    let canSeeDrafts = false;
+    if (req.user) {
+        if (req.user.role === "admin" || (req.user.role === "teacher" && course?.teacherId && course.teacherId.toString() === req.user._id.toString())) {
+            canSeeDrafts = true;
+        }
+    }
+
+    let quizzes = await Quiz.find({ moduleId }).sort({ createdAt: -1 });
+
+    if (!canSeeDrafts) {
+        // Fetch all lectures in this module to check their published status
+        const lectures = await Lecture.find({ moduleId, isPublished: true }, '_id');
+        const publishedLectureIds = new Set(lectures.map(l => l._id.toString()));
+
+        quizzes = quizzes.filter(q => {
+            // 1. Must be published itself
+            if (!q.isPublished) return false;
+            
+            // 2. If it has a parent lecture, that lecture must be published
+            if (q.sourceLectureId) {
+                try {
+                    if (!publishedLectureIds.has(q.sourceLectureId.toString())) {
+                        return false;
+                    }
+                } catch (e) {
+                    console.error("Quiz sourceLectureId check error:", e.message);
+                    return false;
+                }
+            }
+            
+            return true;
+        });
+    }
 
     res.json(quizzes);
 });
@@ -92,6 +132,30 @@ export const getQuizById = asyncHandler(async (req, res) => {
     if (!quiz) {
         res.status(404);
         throw new Error("Quiz not found");
+    }
+
+    // Check visibility
+    const module = await Module.findById(quiz.moduleId);
+    const course = await Course.findById(module?.courseId);
+    
+    // Auth fallback no longer needed
+    let isStaff = false;
+    if (req.user) {
+        isStaff = req.user.role === 'admin' || (course && course.teacherId && course.teacherId.toString() === req.user._id.toString());
+    }
+
+    if (!isStaff) {
+        if (!quiz.isPublished) {
+            res.status(403);
+            throw new Error("This quiz is not yet published.");
+        }
+        if (quiz.sourceLectureId) {
+            const lecture = await Lecture.findById(quiz.sourceLectureId);
+            if (!lecture || !lecture.isPublished) {
+                res.status(403);
+                throw new Error("This quiz belongs to a lecture that is not yet published.");
+            }
+        }
     }
 
     if (req.user?.role === "student") {
@@ -141,6 +205,7 @@ export const deleteQuiz = asyncHandler(async (req, res) => {
     }
 
     await getAuthorizedCourseForModule(quiz.moduleId, req.user);
+    const courseId = quiz.courseId;
     await quiz.deleteOne();
 
     res.json({ message: "Quiz deleted successfully" });

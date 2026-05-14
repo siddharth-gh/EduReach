@@ -47,149 +47,218 @@ const Dashboard = () => {
     fetchOverview();
   }, [t]);
 
-  if (loading) return <AppShell><div className="max-w-7xl mx-auto px-4 py-20 animate-pulse"><div className="h-12 bg-gray-200 dark:bg-gray-800 rounded-2xl w-1/4 mb-10"></div><div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div className="h-48 bg-gray-100 dark:bg-gray-800/50 rounded-[40px]"></div><div className="h-48 bg-gray-100 dark:bg-gray-800/50 rounded-[40px]"></div><div className="h-48 bg-gray-100 dark:bg-gray-800/50 rounded-[40px]"></div></div></div></AppShell>;
+  if (loading) return (
+    <AppShell>
+      <div className="max-w-7xl mx-auto px-4 py-20 animate-pulse">
+        <div className="h-12 bg-surface-muted rounded-2xl w-1/4 mb-10"></div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+           <div className="h-56 bg-surface rounded-[48px]"></div>
+           <div className="h-56 bg-surface rounded-[48px]"></div>
+           <div className="h-56 bg-surface rounded-[48px]"></div>
+        </div>
+      </div>
+    </AppShell>
+  );
+
+  const displayName = (user?.name && !user.name.includes('@')) 
+    ? user.name.split(' ')[0] 
+    : (user?.name || user?.email || '').split('@')[0];
 
   return (
     <AppShell>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-20">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
         
         {/* Welcome Header */}
-        <header className="mb-12">
-           <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[10px] font-black rounded-full uppercase tracking-widest mb-4 inline-block">Student Portal</span>
-           <h1 className="text-4xl font-black text-gray-900 dark:text-white mb-4">
-              {t("dashboard.welcome", { name: user?.name })}
+        <header className="mb-16">
+           <span className="px-3 py-1 bg-accent/10 text-accent text-[10px] font-black rounded-full uppercase tracking-[0.2em] mb-4 inline-block shadow-sm">
+             {t("dashboard.studentPortal")}
+           </span>
+           <h1 className="text-4xl lg:text-6xl font-black text-primary mb-6 tracking-tight leading-tight">
+              {t("dashboard.welcome", { name: displayName })}
            </h1>
-           <p className="text-lg text-gray-500 dark:text-gray-400">{t("dashboard.subtitle")}</p>
+           <p className="text-lg lg:text-xl text-secondary font-medium max-w-2xl">
+             {t("dashboard.subtitle")}
+           </p>
         </header>
 
-        {error && <div className="p-6 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/50 rounded-3xl text-red-600 font-bold mb-10">{error}</div>}
+        {error && (
+          <div className="p-8 bg-error/5 border border-error/10 rounded-[32px] text-error text-[10px] font-black uppercase tracking-[0.2em] text-center mb-12 animate-in fade-in zoom-in duration-500">
+             {error}
+          </div>
+        )}
 
         {/* Top Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-           <article className="bg-white dark:bg-gray-900 p-8 rounded-[40px] border border-gray-100 dark:border-gray-800 shadow-xl shadow-blue-600/5">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">{t("dashboard.progressTitle")}</p>
-              <div className="flex items-end gap-2">
-                 <span className="text-4xl font-black text-gray-900 dark:text-white">{overview?.stats?.enrolledCourses ?? 0}</span>
-                 <span className="text-xs font-bold text-gray-400 mb-2">Courses Enrolled</span>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
+           <article className="bg-surface p-10 rounded-[48px] border border-border shadow-sm relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-accent/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl group-hover:scale-110 transition-transform duration-700" />
+              <p className="text-[10px] font-black text-secondary uppercase tracking-[0.2em] mb-6">{t("dashboard.progressTitle")}</p>
+              <div className="flex items-baseline gap-3 mb-8">
+                 <span className="text-5xl font-black text-primary tracking-tighter">{overview?.stats?.enrolledCourses ?? 0}</span>
+                 <span className="text-xs font-black text-secondary uppercase tracking-widest">{t("dashboard.coursesEnrolled")}</span>
               </div>
-              <div className="mt-4 pt-4 border-t border-gray-50 dark:border-gray-800 flex justify-between">
-                 <span className="text-xs font-bold text-gray-500">Completed Lectures</span>
-                 <span className="text-xs font-black text-blue-600">{overview?.stats?.completedLectures ?? 0}</span>
-              </div>
-           </article>
-
-           <article className="bg-white dark:bg-gray-900 p-8 rounded-[40px] border border-gray-100 dark:border-gray-800 shadow-xl shadow-blue-600/5">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Daily Streak</p>
-              <div className="flex items-end gap-2">
-                 <span className="text-4xl font-black text-orange-500">{user?.streakCount ?? 0}</span>
-                 <span className="text-xs font-bold text-gray-400 mb-2">Days Burning</span>
-              </div>
-              <div className="mt-4 pt-4 border-t border-gray-50 dark:border-gray-800 flex justify-between">
-                 <span className="text-xs font-bold text-gray-500">Last Active</span>
-                 <span className="text-xs font-black text-orange-500">{user?.lastActiveAt ? new Date(user.lastActiveAt).toLocaleDateString() : 'Today'}</span>
+              <div className="pt-8 border-t border-border/50 flex justify-between items-center">
+                 <span className="text-[10px] font-black text-secondary uppercase tracking-widest">{t("dashboard.completedLectures")}</span>
+                 <span className="px-3 py-1 bg-accent/10 text-accent text-xs font-black rounded-lg">{overview?.stats?.completedLectures ?? 0}</span>
               </div>
            </article>
 
-           <article className="bg-blue-600 p-8 rounded-[40px] shadow-2xl shadow-blue-600/20 text-white">
-              <p className="text-[10px] font-black text-blue-200 uppercase tracking-widest mb-2">Next Milestone</p>
-              <h3 className="text-xl font-black mb-2 line-clamp-1">{recommendations[0]?.title || "Keep Learning"}</h3>
-              <p className="text-xs font-bold text-blue-100 opacity-80 mb-4">{recommendations[0]?.reason || "Browse new courses to start your journey."}</p>
+           <article className="bg-surface p-10 rounded-[48px] border border-border shadow-sm relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-warning/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl group-hover:scale-110 transition-transform duration-700" />
+              <p className="text-[10px] font-black text-secondary uppercase tracking-[0.2em] mb-6">{t("dashboard.dailyStreak")}</p>
+              <div className="flex items-baseline gap-3 mb-8">
+                 <span className="text-5xl font-black text-warning tracking-tighter">{user?.streakCount ?? 0}</span>
+                 <span className="text-xs font-black text-secondary uppercase tracking-widest">{t("dashboard.daysFire")}</span>
+              </div>
+              <div className="pt-8 border-t border-border/50 flex justify-between items-center">
+                 <span className="text-[10px] font-black text-secondary uppercase tracking-widest">{t("dashboard.lastActive")}</span>
+                 <span className="px-3 py-1 bg-warning/10 text-warning text-xs font-black rounded-lg">{user?.lastActiveAt ? new Date(user.lastActiveAt).toLocaleDateString() : t("dashboard.today")}</span>
+              </div>
+           </article>
+
+           <article className="bg-accent p-10 rounded-[48px] shadow-2xl shadow-accent/20 text-white relative overflow-hidden group">
+              <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full translate-y-1/2 -translate-x-1/2 blur-3xl" />
+              <p className="text-[10px] font-black text-accent-soft uppercase tracking-[0.2em] mb-6">{t("dashboard.nextMilestone")}</p>
+              <h3 className="text-2xl font-black mb-3 leading-tight tracking-tight line-clamp-1">{recommendations[0]?.title || t("dashboard.keepLearning")}</h3>
+              <p className="text-sm font-bold text-white/70 mb-10 line-clamp-2">{recommendations[0]?.reason || t("dashboard.browseNewCourses")}</p>
               <button 
                 onClick={() => recommendations[0] ? handleRecommendationClick(recommendations[0]) : navigate('/courses')}
-                className="w-full py-3 bg-white text-blue-600 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-blue-50 transition-all"
+                className="w-full py-5 bg-white text-accent text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-surface transition-all transform hover:-translate-y-1 active:scale-95 shadow-xl shadow-black/10"
               >
-                Continue Path
+                {t("dashboard.continuePath")}
               </button>
            </article>
         </div>
 
         {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
            
-           {/* Left/Main Column */}
-           <div className="lg:col-span-2 space-y-10">
-              
-              {/* Enrolled Courses */}
+           {/* Left/Main Column: Active Enrollments */}
+           <div className="lg:col-span-2 space-y-12">
               <section>
-                 <div className="flex items-center gap-4 mb-8">
-                    <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Active Enrollments</h2>
-                    <div className="h-px flex-1 bg-gray-100 dark:bg-gray-800" />
+                 <div className="flex items-center justify-between mb-10">
+                    <h2 className="text-2xl font-black text-primary tracking-tight">{t("dashboard.activeEnrollments")}</h2>
+                    <div className="hidden sm:block h-px flex-1 bg-border/50 mx-8" />
+                    <button onClick={() => navigate('/courses')} className="text-[10px] font-black text-accent uppercase tracking-widest hover:underline">Explore More</button>
                  </div>
-                 <div className="grid grid-cols-1 gap-4">
+                 
+                 <div className="grid grid-cols-1 gap-6">
                     {overview?.enrollments?.map((e) => (
-                      <article key={e._id} onClick={() => navigate(`/course/${e.courseId?._id}`)} className="group bg-white dark:bg-gray-900 p-6 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-xl hover:shadow-blue-600/5 transition-all cursor-pointer flex items-center justify-between">
-                         <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-blue-50 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center text-blue-600 font-black">{e.progressPercent}%</div>
+                      <article 
+                        key={e._id} 
+                        onClick={() => navigate(`/course/${e.courseId?._id}`)} 
+                        className="group bg-surface p-6 lg:p-8 rounded-[32px] border border-border shadow-sm hover:shadow-xl hover:shadow-accent/5 transition-all cursor-pointer flex flex-wrap items-center justify-between gap-6 hover:border-accent/20"
+                      >
+                         <div className="flex items-center gap-6">
+                            <div className="w-16 h-16 bg-accent/5 rounded-[24px] flex items-center justify-center relative group-hover:scale-110 transition-transform">
+                               <svg className="w-8 h-8 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <circle cx="12" cy="12" r="10"></circle>
+                                  <path d="M12 6v6l4 2"></path>
+                               </svg>
+                               <div className="absolute inset-0 rounded-[24px] border-2 border-accent/20" />
+                            </div>
                             <div>
-                               <h3 className="text-sm font-black text-gray-900 dark:text-white group-hover:text-blue-600 transition-colors">{e.courseId?.title}</h3>
-                               <p className="text-xs text-gray-400 mt-1 line-clamp-1">{e.courseId?.description}</p>
+                               <h3 className="text-lg font-black text-primary group-hover:text-accent transition-colors mb-1">{e.courseId?.title}</h3>
+                               <div className="flex items-center gap-4">
+                                  <span className="text-[10px] font-black text-secondary uppercase tracking-widest">{e.progressPercent}% Complete</span>
+                                  <div className="w-32 h-1.5 bg-surface-soft rounded-full overflow-hidden">
+                                     <div className="h-full bg-accent group-hover:bg-accent-soft transition-all" style={{ width: `${e.progressPercent}%` }} />
+                                  </div>
+                               </div>
                             </div>
                          </div>
-                         <span className="text-[10px] font-black text-gray-300 uppercase group-hover:text-blue-600">Open →</span>
+                         <div className="flex items-center gap-3">
+                            <span className="text-[10px] font-black text-secondary uppercase tracking-widest group-hover:text-accent transition-colors">{t("dashboard.openArrow") || "Resume"}</span>
+                            <div className="w-10 h-10 rounded-full bg-surface-soft flex items-center justify-center text-secondary group-hover:bg-accent group-hover:text-white transition-all">
+                               →
+                            </div>
+                         </div>
                       </article>
                     ))}
-                    {!overview?.enrollments?.length && <p className="text-gray-400 italic text-sm py-10 text-center">No active enrollments. Time to start something new!</p>}
+                    {!overview?.enrollments?.length && (
+                      <div className="py-20 text-center bg-surface-soft/30 rounded-[40px] border border-dashed border-border">
+                        <p className="text-secondary font-black uppercase tracking-[0.2em] text-xs">{t("dashboard.noActiveEnrollments")}</p>
+                      </div>
+                    )}
                  </div>
               </section>
 
-              {/* Quiz Results */}
+              {/* Assessment Progress */}
               {attempts.length > 0 && (
                 <section>
-                   <div className="flex items-center gap-4 mb-8">
-                      <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Recent Assessments</h2>
-                      <div className="h-px flex-1 bg-gray-100 dark:bg-gray-800" />
+                   <div className="flex items-center justify-between mb-10">
+                      <h2 className="text-2xl font-black text-primary tracking-tight">{t("dashboard.recentAssessments")}</h2>
+                      <div className="hidden sm:block h-px flex-1 bg-border/50 mx-8" />
                    </div>
-                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                       {attempts.slice(0, 4).map((a) => (
-                        <article key={a._id} onClick={() => navigate(`/quiz-result/${a._id}`)} className="bg-white dark:bg-gray-900 p-6 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm hover:border-blue-500/30 transition-all cursor-pointer">
-                           <div className="flex justify-between items-start mb-4">
-                              <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${a.passed ? 'bg-green-100 dark:bg-green-900/30 text-green-600' : 'bg-red-100 dark:bg-red-900/30 text-red-600'}`}>
-                                 {a.passed ? 'Passed' : 'Needs Review'}
+                        <article 
+                          key={a._id} 
+                          onClick={() => navigate(`/quiz-result/${a._id}`)} 
+                          className="bg-surface p-8 rounded-[32px] border border-border shadow-sm hover:border-accent/30 transition-all cursor-pointer group"
+                        >
+                           <div className="flex justify-between items-start mb-8">
+                              <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${a.passed ? 'bg-success/10 text-success' : 'bg-error/10 text-error'}`}>
+                                 {a.passed ? 'Success' : 'Revision Needed'}
                               </span>
-                              <span className="text-lg font-black text-gray-900 dark:text-white">{a.score}%</span>
+                              <div className="text-right">
+                                 <span className="text-2xl font-black text-primary">{a.score}%</span>
+                                 <p className="text-[9px] font-black text-secondary uppercase tracking-tighter">Score</p>
+                              </div>
                            </div>
-                           <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 line-clamp-1">{a.quizId?.title}</h3>
+                           <h3 className="text-sm font-black text-secondary group-hover:text-primary transition-colors line-clamp-1">{a.quizId?.title}</h3>
+                           <p className="text-[9px] font-black text-accent uppercase tracking-widest mt-2">View Analysis →</p>
                         </article>
                       ))}
                    </div>
                 </section>
               )}
-
            </div>
 
-           {/* Right/Sidebar Column */}
-           <div className="space-y-10">
+           {/* Right/Sidebar Column: Achievements & Notes */}
+           <div className="space-y-12">
               
-              {/* Achievements */}
-              <section className="bg-white dark:bg-gray-900 p-8 rounded-[40px] border border-gray-100 dark:border-gray-800 shadow-xl shadow-blue-600/5">
-                 <h2 className="text-xl font-black text-gray-900 dark:text-white mb-6 flex items-center gap-3">
-                    <span className="text-2xl">🏆</span> Achievements
+              {/* Achievements Section */}
+              <section className="bg-surface p-10 rounded-[48px] border border-border shadow-sm relative overflow-hidden">
+                 <div className="absolute top-0 right-0 w-24 h-24 bg-accent/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-xl" />
+                 <h2 className="text-2xl font-black text-primary mb-10 flex items-center gap-4 tracking-tight">
+                    <span className="w-12 h-12 bg-warning/10 rounded-2xl flex items-center justify-center text-xl">🏆</span> {t("dashboard.achievementsTitle")}
                  </h2>
-                 <div className="space-y-4">
+                 <div className="space-y-6">
                     {achievements.slice(0, 3).map((ach) => (
-                      <div key={ach._id} className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/30 border border-gray-100 dark:border-gray-800">
-                         <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">{ach.type}</p>
-                         <h4 className="text-xs font-black text-gray-900 dark:text-white">{ach.title}</h4>
-                         <p className="text-[10px] text-gray-500 mt-1 italic">{new Date(ach.awardedAt).toLocaleDateString()}</p>
+                      <div key={ach._id} className="p-5 rounded-[24px] bg-surface-soft/50 border border-border group hover:bg-surface transition-all">
+                         <div className="flex items-center justify-between mb-2">
+                            <span className="text-[9px] font-black text-accent uppercase tracking-[0.2em]">{ach.type}</span>
+                            <span className="text-[9px] text-secondary font-bold">{new Date(ach.awardedAt).toLocaleDateString()}</span>
+                         </div>
+                         <h4 className="text-sm font-black text-primary">{ach.title}</h4>
                       </div>
                     ))}
-                    {!achievements.length && <p className="text-xs text-gray-400 italic">No achievements yet. Keep learning to unlock!</p>}
+                    {!achievements.length && (
+                      <p className="text-[10px] font-black text-secondary uppercase tracking-widest italic opacity-50 py-4">{t("dashboard.noAchievements")}</p>
+                    )}
                  </div>
               </section>
 
-              {/* Quick Notes */}
-              <section className="bg-white dark:bg-gray-900 p-8 rounded-[40px] border border-gray-100 dark:border-gray-800 shadow-xl shadow-blue-600/5">
-                 <h2 className="text-xl font-black text-gray-900 dark:text-white mb-6 flex items-center gap-3">
-                    <span className="text-2xl">📝</span> Recent Notes
+              {/* Quick Notes Section */}
+              <section className="bg-surface p-10 rounded-[48px] border border-border shadow-sm relative overflow-hidden">
+                 <div className="absolute bottom-0 right-0 w-24 h-24 bg-accent/5 rounded-full translate-y-1/2 translate-x-1/2 blur-xl" />
+                 <h2 className="text-2xl font-black text-primary mb-10 flex items-center gap-4 tracking-tight">
+                    <span className="w-12 h-12 bg-accent/10 rounded-2xl flex items-center justify-center text-xl">📝</span> {t("dashboard.recentNotes")}
                  </h2>
-                 <div className="space-y-4">
+                 <div className="space-y-6">
                     {notes.slice(0, 3).map((note) => (
-                      <div key={note._id} onClick={() => navigate(`/lecture/${note.lectureId?._id}`)} className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/30 border border-gray-100 dark:border-gray-800 cursor-pointer hover:border-blue-500/30 transition-all">
-                         <h4 className="text-xs font-black text-gray-900 dark:text-white line-clamp-1">{note.lectureId?.title}</h4>
-                         <p className="text-[10px] text-gray-500 mt-2 line-clamp-2 italic">"{note.content}"</p>
+                      <div 
+                        key={note._id} 
+                        onClick={() => navigate(`/lecture/${note.lectureId?._id}`)} 
+                        className="p-5 rounded-[24px] bg-surface-soft/50 border border-border cursor-pointer hover:bg-surface hover:border-accent/20 transition-all group"
+                      >
+                         <h4 className="text-[10px] font-black text-accent uppercase tracking-widest mb-3 line-clamp-1 group-hover:text-primary transition-colors">{note.lectureId?.title}</h4>
+                         <p className="text-xs font-medium text-secondary line-clamp-3 leading-relaxed italic">"{note.content}"</p>
                       </div>
                     ))}
-                    {!notes.length && <p className="text-xs text-gray-400 italic">Capture key insights during lectures.</p>}
+                    {!notes.length && (
+                      <p className="text-[10px] font-black text-secondary uppercase tracking-widest italic opacity-50 py-4">{t("dashboard.noNotes")}</p>
+                    )}
                  </div>
               </section>
 

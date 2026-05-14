@@ -1,261 +1,267 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import API from "../api/api";
 import SidebarLayout from "../layouts/SidebarLayout";
 
+const InlineLectureForm = ({ onCancel, onSubmit, lectureForm, setLectureForm, uploadAsset, uploadStatus, setUploadStatus, uploadProgress, setUploadProgress, isSubmitting, editingLectureId }) => (
+  <div className="bg-surface p-8 rounded-[2.5rem] border-2 border-blue-600 shadow-xl shadow-blue-600/10 space-y-8">
+    <header className="flex justify-between items-start">
+      <div>
+        <h3 className="text-xl font-black text-primary">{editingLectureId ? "Update Lecture" : "New Lecture Draft"}</h3>
+        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Configure your learning material inline</p>
+      </div>
+      <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center text-xl">{'\u270D\uFE0F'}</div>
+    </header>
+    <form onSubmit={onSubmit} className="space-y-8">
+      <div className="grid grid-cols-4 gap-6">
+        <div className="col-span-3 space-y-2">
+          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Title</label>
+          <input className="w-full px-6 py-4 rounded-2xl bg-surface-soft border-none text-primary font-bold focus:ring-2 focus:ring-blue-500 transition-all" placeholder="Enter lecture title..." value={lectureForm.title} onChange={e => setLectureForm(prev => ({...prev, title: e.target.value}))} />
+        </div>
+        <div className="space-y-2">
+          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Order</label>
+          <input type="number" className="w-full px-6 py-4 rounded-2xl bg-surface-soft border-none text-primary font-bold" value={lectureForm.order} onChange={e => setLectureForm(prev => ({...prev, order: e.target.value}))} />
+        </div>
+      </div>
+      <div className="space-y-2">
+        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Notes &amp; Context</label>
+        <textarea rows={3} className="w-full px-6 py-4 rounded-2xl bg-surface-soft border-none text-primary font-bold resize-none" placeholder="Add important context for this lecture..." value={lectureForm.textContent} onChange={e => setLectureForm(prev => ({...prev, textContent: e.target.value}))} />
+      </div>
+      <div className="space-y-6">
+        <div className="flex justify-between items-center px-1">
+          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Media Asset</label>
+          {lectureForm.mediaType !== 'none' && <button type="button" onClick={() => { setLectureForm(prev => ({...prev, mediaType: 'none', videoUrl: '', imageUrl: '', resourceUrl: '', resourceTitle: '', resourceType: 'file', videoJobId: '', videoDuration: 0, resourceExtractedText: '', transcriptText: ''})); setUploadStatus(null); setUploadProgress(0); }} className="text-[9px] font-black text-red-500 uppercase">Clear Asset</button>}
+        </div>
+        <div className="grid grid-cols-4 gap-4">
+          {[{id:'video',label:'Video',icon:'\uD83C\uDFAC'},{id:'image',label:'Image',icon:'\uD83D\uDDBC\uFE0F'},{id:'document',label:'PDF',icon:'\uD83D\uDCC4'},{id:'presentation',label:'PPT/Slides',icon:'\uD83D\uDCCA'}].map(type => (
+            <label key={type.id} className={`cursor-pointer flex flex-col items-center justify-center p-6 rounded-3xl border-2 transition-all ${lectureForm.mediaType === type.id ? 'border-blue-600 bg-blue-50/50 shadow-inner' : 'border-border bg-surface-soft hover:border-blue-200'}`}>
+              <input type="radio" name="media" className="hidden" checked={lectureForm.mediaType === type.id} onChange={() => setLectureForm(prev => ({...prev, mediaType: type.id}))} />
+              <span className="text-2xl mb-2">{type.icon}</span>
+              <span className="text-[8px] font-black uppercase tracking-widest text-primary">{type.label}</span>
+            </label>
+          ))}
+        </div>
+        {lectureForm.mediaType !== 'none' && (
+          <div onClick={() => document.getElementById('inline-asset-upload').click()} className="p-6 border-2 border-dashed border-border rounded-3xl bg-surface-soft/30 flex flex-col items-center gap-4 text-center cursor-pointer hover:border-blue-400 transition-all">
+            <input type="file" id="inline-asset-upload" className="hidden" accept={lectureForm.mediaType === 'image' ? "image/*" : lectureForm.mediaType === 'document' ? ".pdf,application/pdf" : lectureForm.mediaType === 'presentation' ? ".ppt,.pptx" : "video/*"} onChange={e => { if (e.target.files[0]) uploadAsset(e.target.files[0], lectureForm.mediaType); }} />
+            {uploadStatus ? (
+              <div className="w-full max-w-sm space-y-4">
+                <div className="flex flex-col items-center gap-2">
+                  <span className={`text-[10px] font-black uppercase tracking-widest ${uploadStatus === 'Ready!' ? 'text-green-500' : 'text-blue-500 animate-pulse'}`}>{uploadStatus === 'Ready!' ? 'Ready to Save!' : uploadStatus}</span>
+                  <span className="text-3xl font-black text-primary">{uploadProgress}%</span>
+                </div>
+                <div className="h-2 w-full bg-surface rounded-full overflow-hidden"><div className="h-full bg-blue-600 transition-all duration-500" style={{ width: `${uploadProgress}%` }} /></div>
+              </div>
+            ) : (
+              <>
+                <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-xl shadow-sm mb-1">{'\uD83D\uDCC1'}</div>
+                <div>
+                  <p className="text-xs font-bold text-primary">Select your {lectureForm.mediaType} asset</p>
+                  <p className="text-[9px] text-secondary mt-1 uppercase font-bold">Max file size: 500MB</p>
+                </div>
+              </>
+            )}
+            {uploadStatus === 'Ready!' && <div className="mt-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[10px] font-black uppercase tracking-widest rounded-lg">{'\u2713'} Verification Complete</div>}
+          </div>
+        )}
+      </div>
+      <div className="flex gap-4 pt-4 border-t border-border">
+        <button type="button" onClick={onCancel} className="flex-1 py-4 text-[10px] font-black uppercase tracking-widest text-secondary hover:bg-gray-100 rounded-2xl transition-all">Discard Draft</button>
+        <button type="submit" disabled={isSubmitting || (lectureForm.mediaType !== 'none' && uploadStatus !== 'Ready!')} className={`flex-2 py-4 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl shadow-lg transition-all ${((uploadStatus === 'Ready!' || lectureForm.mediaType === 'none') && !isSubmitting) ? "opacity-100 scale-100" : "opacity-50 scale-95"}`}>
+          {isSubmitting ? "Saving..." : editingLectureId ? "Update Lecture" : "Save as Draft"}
+        </button>
+      </div>
+    </form>
+  </div>
+);
+
 const TeacherCourseBuilder = () => {
   const { courseId } = useParams();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState("curriculum"); // curriculum, live, settings
   const [course, setCourse] = useState(null);
   const [modules, setModules] = useState([]);
   const [lecturesByModule, setLecturesByModule] = useState({});
+  const [activeModuleId, setActiveModuleId] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [editingModuleId, setEditingModuleId] = useState(null);
   const [moduleForm, setModuleForm] = useState({ title: "", order: 1 });
+  const [showModuleModal, setShowModuleModal] = useState(false);
+  const [inlineLectureFormModuleId, setInlineLectureFormModuleId] = useState(null);
   const [editingLectureId, setEditingLectureId] = useState(null);
+
+  const [scheduleForm, setScheduleForm] = useState({ title: "", scheduledAt: "", duration: 60 });
   
   const emptyLectureForm = {
     title: "",
     order: 1,
-    mediaType: "none", // 'none', 'video', 'image', 'pdf'
+    mediaType: "none", 
     textContent: "",
     imageUrl: "",
-    imageOriginalSize: 0,
-    imageOptimizedSize: 0,
-    imageIsOptimized: false,
     videoUrl: "",
     videoOptimizedUrl: "",
-    videoAudioOnlyUrl: "",
     videoThumbnailUrl: "",
-    videoCodec: "",
+    videoAudioOnlyUrl: "",
     videoDuration: 0,
-    videoOriginalSize: 0,
-    videoOptimizedSize: 0,
-    videoAudioOnlySize: 0,
-    videoLowBandwidthOptimized: false,
     transcriptText: "",
-    transcriptSource: "whisper",
-    resourceUrl: "",
     resourceTitle: "",
-    resourceType: "pdf",
-    resourceFileName: "",
+    resourceUrl: "",
+    resourceType: "",
     resourceExtractedText: "",
-    resourceOriginalSize: 0,
-    resourceOptimizedSize: 0,
-    resourceIsOptimized: false
+    videoJobId: ""
   };
 
-  const [lectureForms, setLectureForms] = useState({});
-  const [activePolls, setActivePolls] = useState({});
-  const [editingQuizId, setEditingQuizId] = useState(null);
-  const [uploadStatusByModule, setUploadStatusByModule] = useState({});
-  const [uploadProgressByModule, setUploadProgressByModule] = useState({});
-  const [uploadMessageByModule, setUploadMessageByModule] = useState({});
+  const [lectureForm, setLectureForm] = useState(emptyLectureForm);
+  const [uploadStatus, setUploadStatus] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const formEndRef = useRef(null);
   const [error, setError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [pollIntervalId, setPollIntervalId] = useState(null);
 
   const fetchCourseData = useCallback(async () => {
     try {
       const res = await API.get(`/courses/${courseId}`);
       setCourse(res.data);
       const modRes = await API.get(`/modules/${courseId}`);
-      setModules(modRes.data);
+      const sortedModules = modRes.data.sort((a, b) => a.order - b.order);
+      setModules(sortedModules);
+      
+      if (sortedModules.length > 0 && !activeModuleId) {
+        setActiveModuleId(sortedModules[0]._id);
+      }
+      
+      // Optimize lecture fetching with Promise.all
+      const lecturePromises = sortedModules.map(m => API.get(`/lectures/${m._id}`));
+      const lectureResponses = await Promise.all(lecturePromises);
       
       const lectureMap = {};
-      for (const m of modRes.data) {
-        const lecRes = await API.get(`/lectures/${m._id}`);
-        lectureMap[m._id] = lecRes.data;
-      }
+      sortedModules.forEach((m, index) => {
+        const lectures = Array.isArray(lectureResponses[index].data) ? lectureResponses[index].data : [];
+        lectureMap[m._id] = lectures.sort((a, b) => a.order - b.order);
+      });
+      
       setLecturesByModule(lectureMap);
     } catch (err) {
+      console.error("Fetch data error:", err);
       setError("Failed to load course data");
     } finally {
       setLoading(false);
     }
-  }, [courseId]);
+  }, [courseId, activeModuleId]);
+
+  useEffect(() => { fetchCourseData(); }, []);
+
+  // Poll for background job updates (transcription, AI, etc.)
+  useEffect(() => {
+    let interval;
+    // Only poll if at least one lecture is ACTIVELY processing
+    const hasActiveJobs = lecturesByModule[activeModuleId]?.some(l => 
+      (l.videoJobId && l.transcript?.status !== 'ready' && l.transcript?.status !== 'failed') || 
+      (l.aiSummary?.status === 'processing' || l.aiSummary?.status === 'idle') || 
+      (l.aiQuestionBank?.status === 'processing' || l.aiQuestionBank?.status === 'idle')
+    );
+    
+    // We should only poll if there's actually something that COULD be processing.
+    const actuallyNeedsPolling = lecturesByModule[activeModuleId]?.some(l => 
+       (l.videoJobId && l.transcript?.status !== 'ready' && l.transcript?.status !== 'failed') ||
+       (l.transcript?.status === 'ready' && (l.aiSummary?.status === 'processing' || l.aiSummary?.status === 'idle')) ||
+       (l.transcript?.status === 'ready' && (l.aiQuestionBank?.status === 'processing' || l.aiQuestionBank?.status === 'idle'))
+    );
+
+    if (actuallyNeedsPolling) {
+      console.log("[Polling] Active background jobs found. Polling for updates...");
+      interval = setInterval(() => {
+        fetchCourseData(true);
+      }, 5000);
+    }
+
+    return () => clearInterval(interval);
+  }, [lecturesByModule, activeModuleId, fetchCourseData]);
 
   useEffect(() => {
-    fetchCourseData();
-  }, [fetchCourseData]);
-
-  const stopVideoPolling = (moduleId) => {
-    if (activePolls[moduleId]) {
-      clearInterval(activePolls[moduleId]);
-      setActivePolls(curr => {
-        const next = { ...curr };
-        delete next[moduleId];
-        return next;
-      });
+    if (inlineLectureFormModuleId && !editingLectureId && formEndRef.current) {
+       formEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-  };
+  }, [inlineLectureFormModuleId, editingLectureId]);
 
-  const startVideoPolling = (jobId, moduleId) => {
-    stopVideoPolling(moduleId);
-    
-    const poll = async () => {
+
+  const pollUploadJob = (jobId) => {
+    if (pollIntervalId) clearInterval(pollIntervalId);
+    const interval = setInterval(async () => {
       try {
-        const res = await API.get(`/uploads/video/status/${jobId}`);
+        const res = await API.get(`/uploads/status/${jobId}`);
         const job = res.data;
         
-        setUploadProgressByModule(curr => ({ ...curr, [moduleId]: job.progress }));
-        setUploadStatusByModule(curr => ({ ...curr, [moduleId]: job.status }));
-        setUploadMessageByModule(curr => ({ ...curr, [moduleId]: job.message }));
-
-        if (job.status === "ready" && job.result) {
-          stopVideoPolling(moduleId);
-          const result = job.result;
+        if (job.status === "completed" || job.status === "ready" || job.status === "processing") {
+          // If it's just started processing, we have enough to save a draft
+          const isProcessing = job.status === "processing";
           
-          setLectureForms(curr => {
-            const form = curr[moduleId] || emptyLectureForm;
-            return {
-              ...curr,
-              [moduleId]: {
-                ...form,
-                mediaType: "video",
-                videoUrl: result.url,
-                videoOptimizedUrl: result.optimizedUrl,
-                videoAudioOnlyUrl: result.audioOnlyUrl,
-                videoThumbnailUrl: result.thumbnailUrl,
-                videoCodec: result.codec,
-                videoDuration: result.duration,
-                videoOriginalSize: result.bytes,
-                videoOptimizedSize: result.optimizedBytes,
-                videoAudioOnlySize: result.audioOnlyBytes,
-                videoLowBandwidthOptimized: result.isLowBandwidthOptimized,
-                transcriptText: result.transcript?.text || "",
-                transcriptSource: result.transcript?.source || "whisper",
-              }
-            };
-          });
-          setUploadStatusByModule(curr => ({ ...curr, [moduleId]: "ready" }));
-          setUploadMessageByModule(curr => ({ ...curr, [moduleId]: "Adaptive media package is ready." }));
+          clearInterval(interval);
+          setPollIntervalId(null);
+          
+          let updatedForm = { ...lectureForm, videoJobId: jobId };
+          
+          // Use job.result for completed, or job fields directly for processing
+          const source = isProcessing ? job : job.result;
+          const url = source.url || source.originalUrl;
+
+          if (url && (['pdf', 'pptx', 'ppt', 'docx', 'doc', 'text', 'file'].includes(source.type || job.mimeType?.split('/')[1]))) {
+             updatedForm = {
+                ...updatedForm,
+                resourceUrl: url,
+                resourceTitle: source.originalFilename,
+                resourceType: source.type || job.mimeType?.split('/')[1],
+                resourceExtractedText: source.extractedText || "",
+                transcriptText: (source.transcript?.text || source.extractedText || "")
+             };
+          } else {
+             updatedForm = {
+                ...updatedForm,
+                videoUrl: url,
+                videoOptimizedUrl: source.optimizedUrl || "",
+                videoThumbnailUrl: source.thumbnailUrl || "",
+                videoAudioOnlyUrl: source.audioOnlyUrl || "",
+                videoDuration: source.duration || 0,
+                transcriptText: source.transcript?.text || ""
+             };
+          }
+          setLectureForm(updatedForm);
+          setUploadProgress(100);
+          setUploadStatus("Ready!");
+
         } else if (job.status === "failed") {
-          stopVideoPolling(moduleId);
-          setError(`Video processing failed: ${job.error || "Unknown error"}`);
-          setUploadStatusByModule(curr => ({ ...curr, [moduleId]: "Failed" }));
+          clearInterval(interval);
+          setPollIntervalId(null);
+          setUploadStatus("Failed: " + (job.error || "Unknown error"));
+        } else if (job.status === "processing") {
+           const backgroundProgress = 50 + Math.floor((job.progress || 0) * 0.45);
+           setUploadProgress(backgroundProgress);
+           setUploadStatus(job.message || "Processing...");
         }
       } catch (err) {
-        console.error("Polling error:", err);
+        if (err.response?.status === 404) {
+          clearInterval(interval);
+          setPollIntervalId(null);
+          setUploadStatus("Upload complete");
+        } else {
+          clearInterval(interval);
+          setPollIntervalId(null);
+          setUploadStatus("Error polling status");
+        }
       }
-    };
-
-    const interval = setInterval(poll, 3000);
-    setActivePolls(curr => ({ ...curr, [moduleId]: interval }));
-    poll();
-  };
-
-  const buildLecturePayload = (form, moduleId) => {
-    const contents = [];
-    const mediaType = form?.mediaType || "none";
-    const textContent = form?.textContent || "";
-    const title = form?.title || "Untitled Lecture";
-    const order = Number(form?.order) || 1;
-
-    if (textContent.trim()) {
-      contents.push({ type: "text", data: textContent.trim(), order: 1 });
-    }
-
-    if (mediaType === "image" && form?.imageUrl?.trim()) {
-      contents.push({ 
-        type: "image", 
-        url: form.imageUrl.trim(), 
-        originalSize: Number(form.imageOriginalSize) || 0, 
-        optimizedSize: Number(form.imageOptimizedSize) || 0, 
-        isOptimized: Boolean(form.imageIsOptimized), 
-        order: contents.length + 1 
-      });
-    }
-
-    if (mediaType === "video" && form?.videoUrl?.trim()) {
-      contents.push({ 
-        type: "video", 
-        url: form.videoUrl.trim(), 
-        optimizedUrl: form.videoOptimizedUrl?.trim() || "", 
-        audioOnlyUrl: form.videoAudioOnlyUrl?.trim() || "", 
-        thumbnailUrl: form.videoThumbnailUrl?.trim() || "", 
-        codec: form.videoCodec || "", 
-        duration: Number(form.videoDuration) || 0, 
-        originalSize: Number(form.videoOriginalSize) || 0, 
-        optimizedSize: Number(form.videoOptimizedSize) || 0, 
-        audioOnlySize: Number(form.videoAudioOnlySize) || 0, 
-        isLowBandwidthOptimized: Boolean(form.videoLowBandwidthOptimized), 
-        order: contents.length + 1 
-      });
-    }
-
-    const transcriptText = form?.transcriptText || "";
-    const transcriptSource = form?.transcriptSource || "";
-
-    return {
-      moduleId,
-      title: title.trim(),
-      order,
-      contents,
-      transcript: { 
-        text: mediaType === "video" ? transcriptText.trim() : "", 
-        source: (mediaType === "video" && transcriptText.trim()) ? transcriptSource || "whisper" : "" 
-      },
-      resources: (mediaType === "pdf" && form?.resourceTitle?.trim() && form?.resourceUrl?.trim()) ? [{ 
-        title: form.resourceTitle.trim(), 
-        url: form.resourceUrl.trim(), 
-        type: form.resourceType || "pdf", 
-        originalFilename: form.resourceFileName || "", 
-        extractedText: form.resourceExtractedText || "", 
-        originalSize: Number(form.resourceOriginalSize) || 0, 
-        optimizedSize: Number(form.resourceOptimizedSize) || 0, 
-        isOptimized: Boolean(form.resourceIsOptimized) 
-      }] : []
-    };
-  };
-
-  const hydrateLectureForm = (lecture) => {
-    const videoItem = lecture.contents?.find(c => c.type === "video");
-    const imageItem = lecture.contents?.find(c => c.type === "image");
-    const textItem = lecture.contents?.find(c => c.type === "text");
-    const resourceItem = lecture.resources?.[0];
-
-    return {
-      title: lecture.title,
-      order: lecture.order,
-      mediaType: videoItem ? "video" : imageItem ? "image" : "none",
-      textContent: textItem?.data || "",
-      imageUrl: imageItem?.url || "",
-      imageOriginalSize: imageItem?.originalSize || 0,
-      imageOptimizedSize: imageItem?.optimizedSize || 0,
-      imageIsOptimized: imageItem?.isOptimized || false,
-      videoUrl: videoItem?.url || "",
-      videoOptimizedUrl: videoItem?.optimizedUrl || "",
-      videoAudioOnlyUrl: videoItem?.audioOnlyUrl || "",
-      videoThumbnailUrl: videoItem?.thumbnailUrl || "",
-      videoCodec: videoItem?.codec || "",
-      videoDuration: videoItem?.duration || 0,
-      videoOriginalSize: videoItem?.originalSize || 0,
-      videoOptimizedSize: videoItem?.optimizedSize || 0,
-      videoAudioOnlySize: videoItem?.audioOnlySize || 0,
-      videoLowBandwidthOptimized: videoItem?.isLowBandwidthOptimized || false,
-      transcriptText: lecture.transcript?.text || "",
-      transcriptSource: lecture.transcript?.source || "whisper",
-      resourceUrl: resourceItem?.url || "",
-      resourceTitle: resourceItem?.title || "",
-      resourceType: resourceItem?.type || "pdf",
-      resourceFileName: resourceItem?.originalFilename || "",
-      resourceExtractedText: resourceItem?.extractedText || "",
-      resourceOriginalSize: resourceItem?.originalSize || 0,
-      resourceOptimizedSize: resourceItem?.optimizedSize || 0,
-      resourceIsOptimized: resourceItem?.isOptimized || false
-    };
+    }, 3000);
+    setPollIntervalId(interval);
   };
 
   const handleModuleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      if (editingModuleId) await API.put(`/modules/${editingModuleId}`, moduleForm);
+      if (moduleForm._id) await API.put(`/modules/${moduleForm._id}`, moduleForm);
       else await API.post("/modules", { ...moduleForm, courseId });
-      setModuleForm({ title: "", order: 1 });
-      setEditingModuleId(null);
-      fetchCourseData();
+      setShowModuleModal(false);
+      fetchCourseData(true);
     } catch (err) {
       setError("Failed to save module");
     } finally {
@@ -263,349 +269,542 @@ const TeacherCourseBuilder = () => {
     }
   };
 
-  const updateLectureForm = (moduleId, field, value) => {
-    setLectureForms(curr => ({
-      ...curr,
-      [moduleId]: {
-        ...(curr[moduleId] || emptyLectureForm),
-        [field]: value
-      }
-    }));
-  };
-
-  const uploadLectureAsset = async (moduleId, file, type) => {
-    const formData = new FormData();
-    formData.append("file", file);
-    
-    setUploadStatusByModule(curr => ({ ...curr, [moduleId]: "Uploading..." }));
-    setUploadProgressByModule(curr => ({ ...curr, [moduleId]: 0 }));
-    
-    try {
-      const endpoint = type === "image" ? "/uploads/image" : type === "pdf" ? "/uploads/resource" : "/uploads/video";
-      const res = await API.post(endpoint, formData, {
-        onUploadProgress: (p) => {
-          const progress = Math.round((p.loaded * 100) / p.total);
-          setUploadProgressByModule(curr => ({ ...curr, [moduleId]: progress }));
-        }
-      });
-      
-      const { data } = res;
-      if (type === "video") {
-        startVideoPolling(data.jobId, moduleId);
-      } else {
-        setLectureForms(curr => {
-          const form = curr[moduleId] || emptyLectureForm;
-          if (type === "image") return { ...curr, [moduleId]: { ...form, mediaType: "image", imageUrl: data.url, imageOriginalSize: data.originalBytes, imageOptimizedSize: data.optimizedBytes, imageIsOptimized: data.isOptimized } };
-          return { ...curr, [moduleId]: { ...form, mediaType: "pdf", resourceUrl: data.url, resourceTitle: file.name, resourceFileName: file.name, resourceOriginalSize: data.originalBytes, resourceOptimizedSize: data.optimizedBytes, resourceIsOptimized: data.isOptimized, resourceExtractedText: data.extractedText } };
-        });
-        setUploadStatusByModule(curr => ({ ...curr, [moduleId]: "Ready!" }));
-      }
-    } catch (err) {
-      setError("Upload failed");
-      setUploadStatusByModule(curr => ({ ...curr, [moduleId]: "Error" }));
-    }
-  };
-
-  const handleLectureSubmit = async (e, moduleId) => {
+  const handleScheduleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-    
-    const status = uploadStatusByModule[moduleId];
-    console.log("Submitting lecture for module:", moduleId, "Status:", status);
-
-    if (status && status !== "ready" && status !== "Error" && status !== "Ready!") {
-      setError("Please wait for video processing to complete.");
-      return;
-    }
-
-    if (!lectureForms[moduleId]?.title?.trim()) {
-      setError("Lecture title is required");
-      return;
-    }
-
-    const payload = buildLecturePayload(lectureForms[moduleId] || emptyLectureForm, moduleId);
-    console.log("Lecture payload:", payload);
-
     setIsSubmitting(true);
     try {
-      if (editingLectureId) await API.put(`/lectures/${editingLectureId}`, payload);
-      else await API.post("/lectures", payload);
-      setLectureForms(curr => ({ ...curr, [moduleId]: emptyLectureForm }));
-      setEditingLectureId(null);
-      setUploadStatusByModule(curr => { const n = {...curr}; delete n[moduleId]; return n; });
-      fetchCourseData();
+      await API.post(`/courses/${courseId}/schedule-live`, scheduleForm);
+      setScheduleForm({ title: "", scheduledAt: "", duration: 60 });
+      fetchCourseData(true);
+      setStatusMessage("Live session scheduled!");
+      setTimeout(() => setStatusMessage(""), 3000);
     } catch (err) {
-      setError("Failed to save lecture");
+      setError("Failed to schedule live session");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (loading) return <div className="min-h-screen bg-[#0B0F19] flex items-center justify-center text-white">Loading...</div>;
+  const uploadAsset = async (file, type) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    setUploadStatus("Initialising...");
+    setUploadProgress(0);
+    
+    try {
+      const endpoint = (type === "document" || type === "presentation") ? "/uploads/resource" : type === "image" ? "/uploads/image" : "/uploads/video";
+      const res = await API.post(endpoint, formData, {
+        onUploadProgress: (p) => setUploadProgress(Math.round((p.loaded * 50) / p.total))
+      });
+      
+      const { data } = res;
+      if ((type === 'video' || type === 'document' || type === 'presentation') && data.jobId) {
+        setLectureForm(prev => ({ ...prev, mediaType: type, videoJobId: data.jobId }));
+        setUploadStatus("Upload Complete - Verifying...");
+        pollUploadJob(data.jobId);
+        return data.jobId;
+      } else {
+        setLectureForm(prev => ({
+          ...prev,
+          mediaType: type,
+          imageUrl: type === 'image' ? data.url : prev.imageUrl,
+        }));
+        setUploadStatus("Ready!");
+        setUploadProgress(100);
+        return null;
+      }
+    } catch (err) {
+      setError("Upload failed");
+      setUploadStatus("Error");
+      return null;
+    }
+  };
+
+  const saveLecture = async (customForm = null) => {
+    const formToSave = customForm || lectureForm;
+    const targetModuleId = inlineLectureFormModuleId || activeModuleId;
+    
+    if (!targetModuleId) {
+      setError("No module selected to save lecture");
+      return null;
+    }
+
+    setIsSubmitting(true);
+    setError("");
+    try {
+      const data = {
+        title: formToSave.title || "Untitled Lecture",
+        order: formToSave.order,
+        moduleId: targetModuleId,
+        contents: formToSave.textContent?.trim() ? [
+           { type: 'text', data: formToSave.textContent, order: 0 }
+        ] : [],
+        resources: (formToSave.mediaType === 'document' || formToSave.mediaType === 'presentation') ? [
+          { title: formToSave.resourceTitle || 'Resource', url: formToSave.resourceUrl, type: formToSave.resourceType || 'file', originalFilename: formToSave.resourceTitle, extractedText: formToSave.resourceExtractedText }
+        ] : [],
+        videoJobId: formToSave.videoJobId,
+      };
+
+      if (formToSave.mediaType === 'video' && formToSave.videoUrl) {
+         data.contents.push({
+            type: 'video',
+            url: formToSave.videoUrl,
+            optimizedUrl: formToSave.videoOptimizedUrl,
+            thumbnailUrl: formToSave.videoThumbnailUrl,
+            audioOnlyUrl: formToSave.videoAudioOnlyUrl,
+            duration: formToSave.videoDuration,
+            order: 1
+         });
+      }
+
+      let res;
+      if (editingLectureId) {
+        res = await API.put(`/lectures/${editingLectureId}`, data);
+        setStatusMessage("Lecture updated successfully!");
+      } else {
+        res = await API.post('/lectures', data);
+        setStatusMessage("Draft saved successfully!");
+      }
+      
+      const savedLecture = res.data;
+      
+      // Optimistically update the UI
+      setLecturesByModule(prev => {
+        const currentLectures = prev[targetModuleId] || [];
+        // Remove it if we were editing
+        const filtered = editingLectureId ? currentLectures.filter(l => l._id !== editingLectureId) : currentLectures;
+        const updated = [...filtered, savedLecture].sort((a, b) => a.order - b.order);
+        return { ...prev, [targetModuleId]: updated };
+      });
+
+      setInlineLectureFormModuleId(null);
+      setEditingLectureId(null);
+      setLectureForm({ title: "", order: 1, textContent: "", mediaType: 'none', videoUrl: '', imageUrl: '', resourceUrl: '', resourceTitle: '', resourceType: 'file', videoJobId: '', videoDuration: 0, resourceExtractedText: '', transcriptText: '' });
+      setUploadStatus(null);
+      setUploadProgress(0);
+      
+      setTimeout(() => setStatusMessage(""), 3000);
+      
+      // Still fetch in background to ensure consistency
+      fetchCourseData();
+      return savedLecture;
+    } catch (err) {
+      console.error("Lecture save error:", err);
+      setError(err.response?.data?.message || "Failed to save lecture");
+      return null;
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleLectureSubmit = async (e) => {
+    e.preventDefault();
+    await saveLecture();
+  };
+
+  const handleTogglePublish = async (lectureId) => {
+     try {
+        await API.patch(`/lectures/${lectureId}/publish`);
+        fetchCourseData(true);
+     } catch (err) {
+        alert(err.response?.data?.message || "Failed to publish lecture");
+     }
+  };
+
+  if (loading) return (
+    <SidebarLayout>
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-64px)] space-y-4">
+        <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Constructing Builder...</p>
+      </div>
+    </SidebarLayout>
+  );
 
   return (
     <SidebarLayout>
-      <div className="min-h-screen bg-[#0B0F19] text-gray-300 font-sans selection:bg-blue-500/30">
-        <div className="max-w-7xl mx-auto px-6 py-12">
-           
-           <header className="mb-12 flex items-center justify-between">
-              <div>
-                 <h1 className="text-3xl font-black text-white uppercase tracking-tighter mb-2">{course?.title}</h1>
-                 <p className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.3em]">Course Architecture & Content Matrix</p>
-              </div>
-              <div className="flex gap-4">
-                 <button onClick={() => navigate('/teacher/dashboard')} className="px-6 py-3 bg-[#111827] border border-gray-800 text-[10px] font-black text-gray-400 uppercase tracking-widest rounded-xl hover:text-white transition-all">Back to Dashboard</button>
-                 <button onClick={() => setEditingModuleId('new')} className="px-8 py-3 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all">Create New Module</button>
-              </div>
-           </header>
+      <div className="flex h-[calc(100vh-64px)] overflow-hidden bg-background">
+        
+        {/* LEFT SIDEBAR: COURSE CONTEXT */}
+        <aside className="w-80 border-r border-border bg-surface flex flex-col">
+          <div className="p-8 border-b border-border">
+            <span className="px-2 py-0.5 bg-blue-100 text-blue-600 text-[8px] font-black rounded uppercase tracking-[0.2em] mb-3 inline-block">Course Architect</span>
+            <h1 className="text-xl font-black text-primary truncate" title={course?.title}>{course?.title}</h1>
+            <div className="flex gap-2 mt-4">
+               <button onClick={() => navigate('/teacher/courses')} className="text-[10px] font-black text-gray-400 hover:text-primary uppercase tracking-widest transition-colors">← Dashboard</button>
+            </div>
+          </div>
 
-           {error && (
-             <div className="mb-8 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center gap-3 text-red-500">
-               <span className="text-xl">⚠️</span>
-               <span className="text-xs font-bold uppercase tracking-widest">{error}</span>
-             </div>
-           )}
+          <div className="p-4 space-y-1">
+             {[
+                { id: 'curriculum', label: 'Curriculum', icon: '📚' },
+                { id: 'live', label: 'Live Sessions', icon: '📹' },
+                { id: 'settings', label: 'Settings', icon: '⚙️' }
+             ].map(tab => (
+                <button
+                   key={tab.id}
+                   onClick={() => setActiveTab(tab.id)}
+                   className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === tab.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-secondary hover:bg-surface-soft'}`}
+                >
+                   <span className="text-lg">{tab.icon}</span>
+                   {tab.label}
+                </button>
+             ))}
+          </div>
+        </aside>
 
-           <main className="space-y-16">
-              <div className="space-y-6">
-                 <h2 className="text-lg font-black text-white uppercase tracking-tight">CURRICULUM MODULES</h2>
-                 <div className="grid grid-cols-1 gap-8">
-                    {modules.map(m => (
-                      <div key={m._id} className="bg-[#111827]/50 border border-gray-800/50 rounded-3xl p-8 backdrop-blur-xl hover:border-gray-700 transition-all">
-                         <div className="flex items-center justify-between mb-8">
-                            <div className="flex items-center gap-4">
-                               <div className="w-12 h-12 rounded-2xl bg-blue-600/10 flex items-center justify-center text-blue-500 font-black text-lg">{m.order}</div>
-                               <h3 className="text-xl font-black text-white uppercase tracking-tight">{m.title}</h3>
+        {/* MAIN BUILDER AREA */}
+        <main className="flex-1 overflow-hidden bg-background relative">
+          
+          {/* Global Status/Error Overlay */}
+          {(statusMessage || error) && (
+            <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[100] w-full max-w-md px-6">
+               <div className={`p-4 rounded-2xl shadow-2xl border flex items-center justify-between animate-in fade-in slide-in-from-top-4 duration-300 ${error ? 'bg-red-50 border-red-100 text-red-600' : 'bg-emerald-50 border-emerald-100 text-emerald-600'}`}>
+                  <div className="flex items-center gap-3">
+                     <span className="text-lg">{error ? '⚠️' : '✅'}</span>
+                     <p className="text-[10px] font-black uppercase tracking-widest">{error || statusMessage}</p>
+                  </div>
+                  <button onClick={() => { setError(""); setStatusMessage(""); }} className="text-gray-400 hover:text-gray-600">✕</button>
+               </div>
+            </div>
+          )}
+
+          {activeTab === 'curriculum' && (
+             <div className="flex h-full">
+                {/* Curriculum Sub-sidebar (Modules) */}
+                <div className="w-80 border-r border-border bg-surface flex flex-col">
+                   <div className="p-6 border-b border-border flex justify-between items-center">
+                      <span className="text-[10px] font-black text-secondary uppercase tracking-widest">Chapters</span>
+                      <button onClick={() => { setModuleForm({ title: "", order: modules.length + 1 }); setShowModuleModal(true); }} className="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center text-xs shadow-lg shadow-blue-600/20 hover:scale-110 transition-all">+</button>
+                   </div>
+                   <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+                      {modules.map(m => (
+                         <button 
+                            key={m._id} 
+                            onClick={() => setActiveModuleId(m._id)}
+                            className={`w-full flex items-center gap-3 p-4 rounded-2xl text-left transition-all border ${activeModuleId === m._id ? 'bg-surface-soft border-blue-600 shadow-sm' : 'border-transparent text-secondary hover:bg-surface-soft hover:text-primary'}`}
+                         >
+                            <span className={`text-[10px] font-black ${activeModuleId === m._id ? 'text-blue-600' : 'text-gray-400'}`}>{m.order}</span>
+                            <span className="text-xs font-bold truncate">{m.title}</span>
+                         </button>
+                      ))}
+                      {modules.length === 0 && <p className="text-[10px] text-gray-400 italic text-center py-10">No chapters yet</p>}
+                   </div>
+                </div>
+
+                {/* Lecture List */}
+                <div className="flex-1 flex flex-col px-8 pt-6 pb-2 bg-background overflow-hidden">
+                   {activeModuleId ? (
+                      <div className="flex flex-col h-full max-w-4xl mx-auto space-y-4">
+                         <div className="flex justify-between items-center mb-2">
+                            <div>
+                               <h3 className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] mb-2">Curriculum Builder</h3>
+                               <h2 className="text-2xl font-black text-primary mb-1">{modules.find(m => m._id === activeModuleId)?.title}</h2>
+                               <button onClick={() => { setModuleForm(modules.find(m => m._id === activeModuleId)); setShowModuleModal(true); }} className="text-[10px] font-bold text-secondary hover:text-blue-600 transition-colors">Rename Chapter</button>
                             </div>
-                            <div className="flex gap-4">
-                               <button onClick={() => { setEditingModuleId(m._id); setModuleForm({ title: m.title, order: m.order }); }} className="text-[10px] font-black text-gray-500 uppercase tracking-widest hover:text-white transition-all">Edit Module</button>
-                               <button className="text-[10px] font-black text-red-500/50 uppercase tracking-widest hover:text-red-500 transition-all">Delete</button>
-                            </div>
+                            <button 
+                                onClick={() => { 
+                                  setLectureForm({ ...emptyLectureForm, order: (lecturesByModule[activeModuleId]?.length || 0) + 1 }); 
+                                  setEditingLectureId(null); 
+                                  setInlineLectureFormModuleId(activeModuleId); 
+                                  setUploadStatus(null); 
+                                  setUploadProgress(0); 
+                                }}
+                                className="px-6 py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-[9px] font-black uppercase tracking-widest rounded-xl shadow-lg hover:scale-105 transition-all"
+                             >
+                                + New Lecture Draft
+                             </button>
                          </div>
 
-                         <form onSubmit={e => handleLectureSubmit(e, m._id)} className="space-y-6">
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                               <div className="md:col-span-3 space-y-2">
-                                  <label className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em]">Lecture Title</label>
-                                  <input 
-                                    type="text" 
-                                    placeholder="Enter compelling lecture title..."
-                                    className="w-full bg-[#0B0F19] border border-gray-800 rounded-xl px-5 py-4 text-sm text-white placeholder:text-gray-700 focus:outline-none focus:border-blue-500 transition-all"
-                                    value={lectureForms[m._id]?.title || ""}
-                                    onChange={e => updateLectureForm(m._id, 'title', e.target.value)}
-                                  />
-                               </div>
-                               <div className="space-y-2">
-                                  <label className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em]">Order Index</label>
-                                  <input 
-                                    typyupe="number" 
-                                    className="w-full bg-[#0B0F19] border border-gray-800 rounded-xl px-5 py-4 text-sm text-white focus:outline-none focus:border-blue-500 transition-all"
-                                    value={lectureForms[m._id]?.order || 1}
-                                    onChange={e => updateLectureForm(m._id, 'order', e.target.value)}
-                                  />
-                               </div>
-                            </div>
-
-                            <div className="space-y-2">
-                               <label className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em]">Lecture Notes / Text Content</label>
-                               <textarea 
-                                 placeholder="Add important notes, code snippets, or extra context here..."
-                                 className="w-full bg-[#0B0F19] border border-gray-800 rounded-xl px-5 py-4 text-sm text-white placeholder:text-gray-700 focus:outline-none focus:border-blue-500 transition-all min-h-[100px] resize-none"
-                                 value={lectureForms[m._id]?.textContent || ""}
-                                 onChange={e => updateLectureForm(m._id, 'textContent', e.target.value)}
-                               />
-                            </div>
-
-                            <div className="bg-[#0B0F19] border border-gray-800/50 rounded-2xl p-6 space-y-6">
-                               <div className="flex items-center gap-6">
-                                  <label className="flex items-center gap-2 cursor-pointer group">
-                                     <input type="radio" name={`type-${m._id}`} className="hidden" checked={lectureForms[m._id]?.mediaType === 'video'} onChange={() => updateLectureForm(m._id, 'mediaType', 'video')} />
-                                     <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${lectureForms[m._id]?.mediaType === 'video' ? 'border-blue-500 bg-blue-500' : 'border-gray-800'}`}>
-                                        <div className="w-1.5 h-1.5 rounded-full bg-white opacity-0 group-hover:opacity-100 transition-all" />
-                                     </div>
-                                     <span className={`text-[10px] font-black uppercase tracking-widest ${lectureForms[m._id]?.mediaType === 'video' ? 'text-white' : 'text-gray-500'}`}>Video Master</span>
-                                  </label>
-                                  <label className="flex items-center gap-2 cursor-pointer group">
-                                     <input type="radio" name={`type-${m._id}`} className="hidden" checked={lectureForms[m._id]?.mediaType === 'pdf'} onChange={() => updateLectureForm(m._id, 'mediaType', 'pdf')} />
-                                     <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${lectureForms[m._id]?.mediaType === 'pdf' ? 'border-blue-500 bg-blue-500' : 'border-gray-800'}`}>
-                                        <div className="w-1.5 h-1.5 rounded-full bg-white opacity-0 group-hover:opacity-100 transition-all" />
-                                     </div>
-                                     <span className={`text-[10px] font-black uppercase tracking-widest ${lectureForms[m._id]?.mediaType === 'pdf' ? 'text-white' : 'text-gray-500'}`}>Smart Resource</span>
-                                  </label>
-                               </div>
-
-                               <div className="space-y-4">
-                                  {lectureForms[m._id]?.mediaType === 'video' && (
-                                    <div className="space-y-4">
-                                      <div className="flex items-center justify-between p-4 bg-blue-500/5 border border-blue-500/10 rounded-xl">
-                                         <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-xl bg-blue-600/10 flex items-center justify-center text-blue-500 text-xl">📁</div>
-                                            <div>
-                                               <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Video Source</p>
-                                               <p className="text-xs text-gray-400 mt-1">{lectureForms[m._id]?.videoUrl ? "Video file attached" : "No video file selected"}</p>
-                                            </div>
-                                         </div>
-                                         <input type="file" id={`video-upload-${m._id}`} className="hidden" accept="video/*" onChange={e => e.target.files[0] && uploadLectureAsset(m._id, e.target.files[0], 'video')} />
-                                         <button type="button" onClick={() => document.getElementById(`video-upload-${m._id}`).click()} className="text-[10px] font-black text-blue-500 uppercase tracking-widest hover:text-blue-400">Change</button>
-                                      </div>
-
-                                      {(uploadStatusByModule[m._id] && uploadStatusByModule[m._id] !== "Error") && (
-                                        <div className="space-y-3 border-t border-gray-800 pt-4">
-                                           {/* Stage 1: Uploading */}
-                                           <div className="space-y-1.5">
-                                              <div className="flex items-center justify-between">
-                                                 <div className="flex items-center gap-2">
-                                                    <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] ${uploadStatusByModule[m._id] === "Uploading..." ? "bg-blue-600 text-white animate-pulse" : "bg-emerald-500 text-white"}`}>
-                                                       {uploadStatusByModule[m._id] === "Uploading..." ? "1" : "✓"}
-                                                    </div>
-                                                    <span className={`text-[9px] font-bold ${uploadStatusByModule[m._id] === "Uploading..." ? "text-white" : "text-gray-500"}`}>Uploading video</span>
-                                                 </div>
-                                                 {uploadStatusByModule[m._id] === "Uploading..." && <span className="text-[9px] font-bold text-blue-500">{uploadProgressByModule[m._id]}%</span>}
-                                              </div>
-                                              <div className="h-1 w-full bg-gray-800 rounded-full overflow-hidden">
-                                                 <div className={`h-full transition-all duration-500 ${uploadStatusByModule[m._id] === "Uploading..." ? "bg-blue-600" : "bg-emerald-500"}`} style={{ width: uploadStatusByModule[m._id] === "Uploading..." ? `${uploadProgressByModule[m._id]}%` : "100%" }}></div>
-                                              </div>
-                                           </div>
-
-                                           {/* Stage 2: H.264 Compression */}
-                                           <div className="space-y-1.5">
-                                              <div className="flex items-center justify-between">
-                                                 <div className="flex items-center gap-2">
-                                                    <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] ${uploadMessageByModule[m._id]?.includes("H.264") || uploadMessageByModule[m._id]?.includes("Preparing") ? "bg-blue-600 text-white animate-pulse" : (["Extracting audio", "Transcribing", "ready"].some(s => uploadMessageByModule[m._id]?.includes(s) || uploadStatusByModule[m._id] === s) ? "bg-emerald-500 text-white" : "bg-gray-800 text-gray-600")}`}>
-                                                       {(["Extracting audio", "Transcribing", "ready"].some(s => uploadMessageByModule[m._id]?.includes(s) || uploadStatusByModule[m._id] === s)) ? "✓" : "2"}
-                                                    </div>
-                                                    <span className={`text-[9px] font-bold ${(uploadMessageByModule[m._id]?.includes("H.264") || uploadMessageByModule[m._id]?.includes("Preparing")) ? "text-white" : "text-gray-500"}`}>H.264 Compression</span>
-                                                 </div>
-                                              </div>
-                                              <div className="h-1 w-full bg-gray-800 rounded-full overflow-hidden">
-                                                 <div className={`h-full transition-all duration-[4000ms] ease-out ${(uploadMessageByModule[m._id]?.includes("H.264") || uploadMessageByModule[m._id]?.includes("Preparing")) ? "bg-blue-600 w-[75%] animate-pulse" : (["Extracting audio", "Transcribing", "ready"].some(s => uploadMessageByModule[m._id]?.includes(s) || uploadStatusByModule[m._id] === s) ? "bg-emerald-500 w-full" : "w-0")}`}></div>
-                                              </div>
-                                           </div>
-
-                                           {/* Stage 3: Audio Extraction */}
-                                           <div className="space-y-1.5">
-                                              <div className="flex items-center justify-between">
-                                                 <div className="flex items-center gap-2">
-                                                    <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] ${uploadMessageByModule[m._id]?.includes("Extracting audio") ? "bg-blue-600 text-white animate-pulse" : (["Transcribing", "ready"].some(s => uploadMessageByModule[m._id]?.includes(s) || uploadStatusByModule[m._id] === s) ? "bg-emerald-500 text-white" : "bg-gray-800 text-gray-600")}`}>
-                                                       {(["Transcribing", "ready"].some(s => uploadMessageByModule[m._id]?.includes(s) || uploadStatusByModule[m._id] === s)) ? "✓" : "3"}
-                                                    </div>
-                                                    <span className={`text-[9px] font-bold ${uploadMessageByModule[m._id]?.includes("Extracting audio") ? "text-white" : "text-gray-500"}`}>Audio Extraction</span>
-                                                 </div>
-                                              </div>
-                                              <div className="h-1 w-full bg-gray-800 rounded-full overflow-hidden">
-                                                 <div className={`h-full transition-all duration-[3000ms] ease-out ${uploadMessageByModule[m._id]?.includes("Extracting audio") ? "bg-blue-600 w-[80%] animate-pulse" : (["Transcribing", "ready"].some(s => uploadMessageByModule[m._id]?.includes(s) || uploadStatusByModule[m._id] === s) ? "bg-emerald-500 w-full" : "w-0")}`}></div>
-                                              </div>
-                                           </div>
-
-                                           {/* Stage 4: AI Transcription */}
-                                           <div className="space-y-1.5">
-                                              <div className="flex items-center justify-between">
-                                                 <div className="flex items-center gap-2">
-                                                    <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] ${uploadMessageByModule[m._id]?.includes("Transcribing") ? "bg-blue-600 text-white animate-pulse" : (uploadStatusByModule[m._id] === "ready" ? "bg-emerald-500 text-white" : "bg-gray-800 text-gray-600")}`}>
-                                                       {uploadStatusByModule[m._id] === "ready" ? "✓" : "4"}
-                                                    </div>
-                                                    <span className={`text-[9px] font-bold ${uploadMessageByModule[m._id]?.includes("Transcribing") ? "text-white" : "text-gray-500"}`}>AI Transcription</span>
-                                                 </div>
-                                              </div>
-                                              <div className="h-1 w-full bg-gray-800 rounded-full overflow-hidden">
-                                                 <div className={`h-full transition-all duration-[6000ms] ease-out ${uploadMessageByModule[m._id]?.includes("Transcribing") ? "bg-blue-600 w-[90%] animate-pulse" : (uploadStatusByModule[m._id] === "ready" ? "bg-emerald-500 w-full" : "w-0")}`}></div>
-                                              </div>
-                                           </div>
-
-                                           {uploadStatusByModule[m._id] === "ready" && (
-                                              <div className="pt-2 flex items-center gap-2 text-emerald-500 bg-emerald-500/5 p-2 rounded-lg border border-emerald-500/10">
-                                                 <span className="text-sm">✓</span>
-                                                 <span className="text-[9px] font-black uppercase tracking-[0.2em]">Ready to save</span>
-                                              </div>
-                                           )}
-                                        </div>
-                                      )}
+                         <div className="flex-1 overflow-y-auto">
+                            {lecturesByModule[activeModuleId]?.map(l => (
+                               <div key={l._id}>
+                                {editingLectureId === l._id ? (
+                                   <div className="mb-4">
+                                      <InlineLectureForm 
+                                         moduleId={activeModuleId} 
+                                         onCancel={() => { setEditingLectureId(null); setInlineLectureFormModuleId(null); }} 
+                                         onSubmit={handleLectureSubmit}
+                                         lectureForm={lectureForm}
+                                         setLectureForm={setLectureForm}
+                                         uploadAsset={uploadAsset}
+                                         uploadStatus={uploadStatus}
+                                         setUploadStatus={setUploadStatus}
+                                         uploadProgress={uploadProgress}
+                                         setUploadProgress={setUploadProgress}
+                                         isSubmitting={isSubmitting}
+                                         editingLectureId={editingLectureId}
+                                      />
+                                   </div>
+                                ) : (
+                                <div className={`bg-surface p-4 rounded-3xl border transition-all space-y-3 group ${l.isPublished ? 'border-border' : 'border-dashed border-blue-300 bg-blue-50/10'}`}>
+                                   <div className="flex items-center gap-5">
+                                    <div className="w-10 h-10 rounded-xl bg-surface-soft flex items-center justify-center text-xl group-hover:scale-105 transition-transform shrink-0">
+                                       {l.contents?.find(c => c.type === 'video') ? '📽️' : '📄'}
                                     </div>
-                                  )}
-                               </div>
-                            </div>
+                                    <div className="flex-1 min-w-0">
+                                       <div className="flex items-center gap-2">
+                                          <h4 className="text-base font-bold text-primary truncate">{l.title}</h4>
+                                          {!l.isPublished && <span className="px-2 py-0.5 bg-blue-100 text-blue-600 text-[8px] font-black uppercase rounded tracking-widest">Draft</span>}
+                                       </div>
+                                       <span className="text-[10px] font-black text-secondary uppercase tracking-widest">Lecture {l.order}</span>
+                                    </div>
+                                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all shrink-0">
+                                       <button 
+                                          onClick={() => window.open('/lecture/' + l._id, '_blank')}
+                                          className="p-3 bg-surface-soft text-emerald-500 rounded-xl hover:bg-emerald-500 hover:text-white transition-all"
+                                          title="Preview Lecture"
+                                       >👁️</button>
+                                       <button 
+                                          onClick={() => { 
+                                              const v = l.contents.find(c => c.type === 'video');
+                                              const r = l.resources?.[0];
+                                              setEditingLectureId(l._id); 
+                                              setInlineLectureFormModuleId(l.moduleId);
+                                              setLectureForm({
+                                                 title: l.title, 
+                                                 order: l.order, 
+                                                 textContent: l.contents.find(c => c.type === 'text')?.data || "",
+                                                 mediaType: v ? 'video' : l.contents.find(c => c.type === 'image') ? 'image' : (r?.type === 'ppt' || r?.type === 'pptx') ? 'presentation' : l.resources?.length > 0 ? 'document' : 'none',
+                                                 videoUrl: v?.url || "", 
+                                                 videoOptimizedUrl: v?.optimizedUrl || "",
+                                                 videoThumbnailUrl: v?.thumbnailUrl || "",
+                                                 videoAudioOnlyUrl: v?.audioOnlyUrl || "",
+                                                 videoDuration: v?.duration || 0,
+                                                 transcriptText: l.transcript?.text || "", 
+                                                 resourceTitle: r?.title || "", 
+                                                 resourceUrl: r?.url || "", 
+                                                 resourceType: r?.type || "",
+                                                 resourceExtractedText: r?.extractedText || "",
+                                                 videoJobId: l.videoJobId || ""
+                                              }); setUploadStatus(null); setUploadProgress(0); 
+                                           }}
+                                          className="p-3 bg-surface-soft text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all"
+                                       >✏️</button>
+                                       <button 
+                                          onClick={async () => { if(window.confirm('Delete lecture?')) { await API.delete(`/lectures/${l._id}`); fetchCourseData(); } }}
+                                          className="p-3 bg-surface-soft text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all"
+                                       >🗑️</button>
+                                    </div>
+                                   </div>
+                                   {/* Processing Pipeline */}
+                                   {(() => {
+                                      const video = l.contents.find(c => c.type === 'video');
+                                      const resource = l.resources?.[0];
+                                      
+                                      const steps = [
+                                         { label: 'Compress', status: video ? (video.isOptimized || video.optimizedUrl ? 'ready' : 'idle') : (resource?.isOptimized ? 'ready' : 'skip') },
+                                         { label: 'Audio', status: video ? (video.audioOnlyUrl ? 'ready' : 'idle') : 'skip' },
+                                         { label: 'Transcript', status: (video || resource) ? ((l.transcript?.status === 'ready' || l.transcript?.text || l.resources?.[0]?.extractedText) ? 'ready' : (l.transcript?.status || 'idle')) : 'skip' },
+                                         { label: 'AI Summary', status: l.aiSummary?.status || 'idle' },
+                                         { label: 'AI Quiz', status: l.aiQuestionBank?.status || l.aiMcqs?.status || 'idle' },
+                                      ].filter(s => s.status !== 'skip');
+                                      if (steps.length === 0) return null;
+                                      
+                                      const isAllReady = steps.every(s => s.status === 'ready' || s.status === 'skip');
 
-                            <div className="flex items-center justify-between pt-2">
-                               <div className="text-[9px] font-black text-gray-600 uppercase tracking-[0.2em]">{uploadMessageByModule[m._id] || "System Ready"}</div>
-                               <div className="flex gap-3">
-                                  {editingLectureId && <button type="button" onClick={() => { setEditingLectureId(null); setLectureForms(curr => ({ ...curr, [m._id]: emptyLectureForm })); }} className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Cancel</button>}
-                                  <button 
-                                    type="submit" 
-                                    disabled={isSubmitting || (uploadStatusByModule[m._id] && uploadStatusByModule[m._id] !== "ready" && uploadStatusByModule[m._id] !== "Error" && uploadStatusByModule[m._id] !== "Ready!")}
-                                    className="px-6 py-3 bg-blue-600 text-white text-[10px] font-black rounded-lg uppercase tracking-[0.2em] hover:bg-blue-700 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                                  >
-                                     {isSubmitting ? "Saving..." : "Save Lecture"}
-                                  </button>
+                                      return (
+                                         <div className="flex flex-col gap-1.5 mt-3 bg-surface-soft/50 p-4 rounded-xl border border-border">
+                                            <div className="flex justify-between items-center mb-2">
+                                               <div className="text-[10px] font-black uppercase tracking-widest text-primary">Processing Pipeline</div>
+                                               <button 
+                                                  disabled={!isAllReady && !l.isPublished}
+                                                  onClick={() => handleTogglePublish(l._id)}
+                                                  className={`px-4 py-2 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${
+                                                     l.isPublished 
+                                                        ? 'bg-red-50 text-red-600 hover:bg-red-600 hover:text-white' 
+                                                        : isAllReady 
+                                                           ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20 hover:scale-105' 
+                                                           : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                  }`}
+                                               >
+                                                  {l.isPublished ? 'Unpublish' : isAllReady ? 'Publish Draft' : 'AI Processing...'}
+                                               </button>
+                                            </div>
+                                            {steps.map((s, si) => (
+                                               <div key={si} className="flex items-center gap-2">
+                                                  <div className="w-24 text-[9px] font-black uppercase tracking-widest text-secondary">{s.label}</div>
+                                                  <div className="flex-1 h-2 bg-border/40 rounded-full overflow-hidden relative">
+                                                     <div className={`absolute inset-y-0 left-0 transition-all duration-1000 ${
+                                                        s.status === 'ready' ? 'w-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' :
+                                                        s.status === 'processing' ? 'w-1/2 bg-blue-500 animate-pulse' :
+                                                        s.status === 'failed' ? 'w-full bg-red-500' :
+                                                        'w-0 bg-transparent'
+                                                     }`} />
+                                                  </div>
+                                                  <div className="w-16 text-right text-[8px] font-black uppercase tracking-widest">
+                                                     {s.status === 'ready' ? <span className="text-emerald-500">Complete</span> :
+                                                      s.status === 'processing' ? <span className="text-blue-500 animate-pulse">Working...</span> :
+                                                      s.status === 'failed' ? <span className="text-red-500">Failed</span> :
+                                                      <span className="text-gray-400">Waiting</span>}
+                                                  </div>
+                                               </div>
+                                            ))}
+                                         </div>
+                                      );
+                                   })()}
+                                </div>
+                                )}
                                </div>
+                            ))}
+
+                            {inlineLectureFormModuleId === activeModuleId && !editingLectureId && (
+                                <div className="mb-8 pt-6 border-t-4 border-dashed border-border" ref={formEndRef}>
+                                    <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-4 text-center">New Lecture Draft</h4>
+                                    <InlineLectureForm 
+                                       moduleId={activeModuleId} 
+                                       onCancel={() => setInlineLectureFormModuleId(null)} 
+                                       onSubmit={handleLectureSubmit}
+                                       lectureForm={lectureForm}
+                                       setLectureForm={setLectureForm}
+                                       uploadAsset={uploadAsset}
+                                       uploadStatus={uploadStatus}
+                                       setUploadStatus={setUploadStatus}
+                                       uploadProgress={uploadProgress}
+                                       setUploadProgress={setUploadProgress}
+                                       isSubmitting={isSubmitting}
+                                       editingLectureId={editingLectureId}
+                                    />
+                                </div>
+                            )}
+
+                            {lecturesByModule[activeModuleId]?.length === 0 && !inlineLectureFormModuleId && (
+                               <div className="py-24 text-center border-4 border-dashed border-border rounded-[3rem] text-secondary bg-surface-soft/20">
+                                  <div className="w-16 h-16 bg-surface rounded-2xl flex items-center justify-center text-2xl mx-auto mb-6 shadow-sm">📂</div>
+                                  <p className="text-lg font-bold text-primary">Chapter is empty</p>
+                                  <p className="text-xs uppercase font-black tracking-widest mt-2 text-secondary">Start building your knowledge base</p>
+                               </div>
+                            )}
+                         </div>
+                      </div>
+                   ) : (
+                      <div className="h-full flex flex-col items-center justify-center text-center space-y-6">
+                         <div className="w-24 h-24 bg-surface-soft rounded-[2.5rem] shadow-inner flex items-center justify-center text-5xl">🏗️</div>
+                         <div>
+                            <h3 className="text-2xl font-black text-primary mb-2">Architect Your Curriculum</h3>
+                            <p className="text-secondary text-sm max-w-xs mx-auto font-medium">Select a chapter from the left to manage lectures and learning materials.</p>
+                         </div>
+                      </div>
+                   )}
+                </div>
+             </div>
+          )}
+
+          {activeTab === 'live' && (
+             <div className="p-16 max-w-5xl mx-auto space-y-12 overflow-y-auto h-full custom-scrollbar">
+                <header className="flex justify-between items-end">
+                   <div>
+                      <h2 className="text-4xl font-black text-primary mb-2">Live Sessions</h2>
+                      <p className="text-secondary">Plan and manage your upcoming interactive broadcasts.</p>
+                   </div>
+                   <div className="flex items-center gap-3 text-[10px] font-black text-emerald-500 uppercase tracking-widest">
+                      <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                      System Online
+                   </div>
+                </header>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+                   <div className="lg:col-span-1 space-y-8">
+                      <div className="bg-surface p-10 rounded-[3rem] border border-border shadow-sm">
+                         <h3 className="text-lg font-black text-primary mb-6">New Schedule</h3>
+                         <form onSubmit={handleScheduleSubmit} className="space-y-6">
+                            <div className="space-y-2">
+                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Topic</label>
+                               <input className="w-full px-6 py-4 rounded-2xl bg-surface-soft border-none text-sm font-bold" placeholder="Q&A Session..." value={scheduleForm.title} onChange={e => setScheduleForm({...scheduleForm, title: e.target.value})} />
                             </div>
+                            <div className="space-y-2">
+                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Date & Time</label>
+                               <input type="datetime-local" className="w-full px-6 py-4 rounded-2xl bg-surface-soft border-none text-sm font-bold" value={scheduleForm.scheduledAt} onChange={e => setScheduleForm({...scheduleForm, scheduledAt: e.target.value})} />
+                            </div>
+                            <button type="submit" disabled={isSubmitting} className="w-full py-5 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-blue-600/20">{isSubmitting ? 'Creating...' : 'Launch Schedule'}</button>
                          </form>
                       </div>
-                    ))}
-                 </div>
-              </div>
+                   </div>
 
-              <div className="space-y-4">
-                 <h2 className="text-lg font-black text-white uppercase tracking-tight">EXISTING LECTURES</h2>
-                 <div className="grid grid-cols-1 gap-4">
-                    {modules.map(m => (
-                      <div key={m._id} className="space-y-2">
-                         <div className="flex items-center gap-4">
-                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{m.title}</span>
-                            <div className="h-px flex-1 bg-gray-900" />
-                         </div>
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {lecturesByModule[m._id]?.map(l => (
-                              <div key={l._id} className="bg-[#111827] border border-gray-800 p-6 rounded-2xl group hover:border-blue-500/30 transition-all">
-                                 <div className="flex items-center justify-between mb-4">
-                                    <div className="flex items-center gap-4">
-                                       <div className="w-10 h-10 rounded-xl bg-[#0B0F19] flex items-center justify-center text-lg">📽️</div>
-                                       <div>
-                                          <p className="text-sm font-bold text-white">{l.title}</p>
-                                          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">{l.contents?.length || 0} Assets</p>
-                                       </div>
-                                    </div>
-                                    <div className="flex gap-3">
-                                       <button onClick={() => { setEditingLectureId(l._id); setLectureForms(curr => ({ ...curr, [m._id]: hydrateLectureForm(l) })); window.scrollTo({top: 0, behavior: 'smooth'}); }} className="text-[10px] font-black text-blue-500 uppercase tracking-widest hover:text-blue-400">Edit</button>
-                                       <button onClick={async () => { if(window.confirm('Delete lecture?')) { await API.delete(`/lectures/${l._id}`); fetchCourseData(); } }} className="text-[10px] font-black text-red-500 uppercase tracking-widest hover:text-red-400">Delete</button>
-                                    </div>
-                                 </div>
-                                 
-                                 <div className="flex items-center justify-between pt-4 border-t border-gray-800/50">
-                                    <div className="flex gap-4">
-                                      <div className="flex items-center gap-1.5" title={l.aiSummary?.error}>
-                                        <div className={`w-1.5 h-1.5 rounded-full ${l.aiSummary?.status === 'ready' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : l.aiSummary?.status === 'processing' ? 'bg-blue-500 animate-pulse' : 'bg-gray-600'}`}></div>
-                                        <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Summary</span>
-                                      </div>
-                                      <div className="flex items-center gap-1.5" title={l.aiQuestionBank?.error}>
-                                        <div className={`w-1.5 h-1.5 rounded-full ${l.aiQuestionBank?.status === 'ready' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : l.aiQuestionBank?.status === 'processing' ? 'bg-blue-500 animate-pulse' : 'bg-gray-600'}`}></div>
-                                        <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Adaptive Quiz</span>
-                                      </div>
-                                    </div>
-                                    <button 
-                                      onClick={async () => {
-                                        try {
-                                          await API.post(`/lectures/single/${l._id}/ai-refresh`);
-                                          fetchCourseData();
-                                          setStatusMessage("AI generation restarted!");
-                                        } catch (err) {
-                                          setError("Failed to refresh AI");
-                                        }
-                                      }}
-                                      className="text-[9px] font-black text-blue-500 uppercase tracking-widest hover:text-blue-400 flex items-center gap-1"
-                                    >
-                                      <span>↺</span> Refresh AI
-                                    </button>
-                                 </div>
-                              </div>
-                            ))}
-                         </div>
+                    <div className="lg:col-span-2 space-y-6">
+                       <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Upcoming Sessions</h4>
+                      <div className="grid grid-cols-1 gap-4">
+                         {course?.scheduledSessions?.map((s, idx) => (
+                            <div key={idx} className="bg-surface p-8 rounded-[2.5rem] border border-border shadow-sm flex items-center justify-between group">
+                               <div className="flex items-center gap-6">
+                                  <div className="w-16 h-16 rounded-3xl bg-emerald-100 flex flex-col items-center justify-center text-emerald-600">
+                                     <span className="text-xs font-black">{new Date(s.scheduledAt).getDate()}</span>
+                                     <span className="text-[8px] font-black uppercase">{new Date(s.scheduledAt).toLocaleString('default', { month: 'short' })}</span>
+                                  </div>
+                                  <div>
+                                     <h4 className="text-lg font-bold text-primary">{s.title}</h4>
+                                     <p className="text-xs text-secondary mt-1">{new Date(s.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • Interactive Classroom</p>
+                                  </div>
+                               </div>
+                               <button 
+                                  onClick={async () => { if(window.confirm('Remove schedule?')) { const updated = course.scheduledSessions.filter((_, i) => i !== idx); await API.put(`/courses/${courseId}`, { scheduledSessions: updated }); fetchCourseData(); } }}
+                                  className="p-4 bg-surface-soft text-gray-400 hover:text-red-500 rounded-2xl opacity-0 group-hover:opacity-100 transition-all"
+                               >🗑️</button>
+                            </div>
+                         ))}
+                         {course?.scheduledSessions?.length === 0 && (
+                            <div className="py-20 text-center border-4 border-dashed border-border rounded-[3rem] text-gray-400">
+                               <p className="text-sm font-medium">No live sessions scheduled yet.</p>
+                            </div>
+                         )}
                       </div>
-                    ))}
-                 </div>
-              </div>
-           </main>
+                   </div>
+                </div>
+             </div>
+          )}
 
-        </div>
+          {activeTab === 'settings' && (
+             <div className="p-16 max-w-4xl mx-auto space-y-12 overflow-y-auto h-full custom-scrollbar">
+                <header>
+                   <h2 className="text-4xl font-black text-primary mb-2">Course Core</h2>
+                   <p className="text-secondary">Update your course identity and visibility settings.</p>
+                </header>
+                <div className="bg-surface p-12 rounded-[3rem] border border-border shadow-sm space-y-8">
+                   <div className="grid grid-cols-2 gap-8">
+                      <div className="space-y-2">
+                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Display Title</label>
+                         <input className="w-full px-6 py-4 rounded-2xl bg-surface-soft border-none font-bold" defaultValue={course?.title} />
+                      </div>
+                      <div className="space-y-2">
+                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Category</label>
+                         <select className="w-full px-6 py-4 rounded-2xl bg-surface-soft border-none font-bold outline-none appearance-none">
+                            <option>{course?.category || 'General'}</option>
+                         </select>
+                      </div>
+                   </div>
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Short Description</label>
+                      <textarea rows={4} className="w-full px-6 py-4 rounded-2xl bg-surface-soft border-none font-bold resize-none" defaultValue={course?.description} />
+                   </div>
+                   <button className="px-10 py-5 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-blue-600/20">Save Changes</button>
+                </div>
+             </div>
+          )}
+
+        </main>
+
+        {/* MODAL: MODULE FORM */}
+        {showModuleModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowModuleModal(false)} />
+            <div className="relative bg-surface w-full max-md p-10 rounded-[3rem] border border-border shadow-2xl">
+              <h3 className="text-2xl font-black text-primary mb-8">{moduleForm._id ? "Edit Chapter" : "New Chapter"}</h3>
+              <form onSubmit={handleModuleSubmit} className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Chapter Title</label>
+                  <input className="w-full px-6 py-4 rounded-2xl bg-surface-soft border-none text-primary font-bold focus:ring-2 focus:ring-blue-500 transition-all" placeholder="e.g. Advanced Calculus" value={moduleForm.title} onChange={e => setModuleForm({...moduleForm, title: e.target.value})} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Order Index</label>
+                  <input type="number" className="w-full px-6 py-4 rounded-2xl bg-surface-soft border-none text-primary font-bold" value={moduleForm.order} onChange={e => setModuleForm({...moduleForm, order: e.target.value})} />
+                </div>
+                <div className="flex gap-4 pt-4">
+                  <button type="button" onClick={() => setShowModuleModal(false)} className="flex-1 py-4 text-[10px] font-black uppercase tracking-widest text-secondary hover:bg-gray-100 rounded-2xl transition-all">Cancel</button>
+                  <button type="submit" disabled={isSubmitting} className="flex-1 py-4 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-blue-600/20">{isSubmitting ? "Saving..." : "Save Chapter"}</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </SidebarLayout>
   );

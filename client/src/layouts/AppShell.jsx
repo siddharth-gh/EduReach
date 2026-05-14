@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import Navbar from "../components/Navbar";
 import MobileSidebar from "../components/MobileSidebar";
 
-const AppShell = ({ children }) => {
+const AppShell = ({ children, fullWidth = false }) => {
   const { t } = useTranslation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -87,7 +87,7 @@ const AppShell = ({ children }) => {
   };
 
   return (
-    <div className="min-h-screen bg-white dark:bg-[#0B0F19] transition-colors duration-200">
+    <div className="min-h-screen bg-background transition-colors duration-200">
       {isOffline ? (
         <div className="bg-red-600 text-white text-center py-2 text-sm font-medium">
           {t("app.offlineBanner")}
@@ -124,7 +124,7 @@ const AppShell = ({ children }) => {
         onToggleTheme={toggleTheme} 
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} 
       />
-      <main className="shell-content">{children}</main>
+      <main className={fullWidth ? "w-full" : "shell-content"}>{children}</main>
       <MobileSidebar 
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} 

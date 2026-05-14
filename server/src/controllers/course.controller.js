@@ -242,3 +242,96 @@ export const getCourseLiveSession = asyncHandler(async (req, res) => {
         liveSession: course.liveSession,
     });
 });
+
+// @desc Rate Course
+// @route POST /api/courses/:id/rate
+export const rateCourse = asyncHandler(async (req, res) => {
+    const { rating, review } = req.body;
+    const courseId = req.params.id;
+
+    if (!rating || rating < 1 || rating > 5) {
+        res.status(400);
+        throw new Error("Valid rating (1-5) is required");
+    }
+
+    const course = await Course.findById(courseId);
+    if (!course) {
+        res.status(404);
+        throw new Error("Course not found");
+    }
+
+    // Check if user is enrolled
+    const enrollment = await Enrollment.findOne({
+        courseId,
+        studentId: req.user._id,
+    });
+    if (!enrollment && req.user.role !== "admin") {
+        res.status(403);
+        throw new Error("Only enrolled students can rate this course");
+    }
+
+    // Check if user already rated
+    const existingRatingIndex = course.ratings.findIndex(
+        (r) => r.userId.toString() === req.user._id.toString()
+    );
+
+    if (existingRatingIndex > -1) {
+        // Update existing rating
+        course.ratings[existingRatingIndex].rating = rating;
+        course.ratings[existingRatingIndex].review = review || "";
+        course.ratings[existingRatingIndex].createdAt = new Date();
+    } else {
+        // Add new rating
+        course.ratings.push({
+            userId: req.user._id,
+            rating,
+            review: review || "",
+        });
+    }
+
+    // Calculate average rating
+    const totalRating = course.ratings.reduce((acc, r) => acc + r.rating, 0);
+    course.averageRating = (totalRating / course.ratings.length).toFixed(1);
+
+    await course.save();
+
+    res.json({
+        message: "Rating submitted successfully",
+        averageRating: course.averageRating,
+        ratingsCount: course.ratings.length,
+    });
+});
+
+// @desc Schedule Live Session
+// @route POST /api/courses/:id/schedule-live
+export const scheduleLiveSession = asyncHandler(async (req, res) => {
+    const { title, scheduledAt, duration } = req.body;
+    const course = await Course.findById(req.params.id);
+
+    if (!course) {
+        res.status(404);
+        throw new Error("Course not found");
+    }
+
+    // Check if user is the teacher of this course
+    if (course.teacherId.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+        res.status(403);
+        throw new Error("Not authorized to schedule sessions for this course");
+    }
+
+    if (!title || !scheduledAt) {
+        res.status(400);
+        throw new Error("Title and scheduled time are required");
+    }
+
+    const newSession = {
+        title,
+        scheduledAt: new Date(scheduledAt),
+        duration: Number(duration) || 60,
+    };
+
+    course.scheduledSessions.push(newSession);
+    await course.save();
+
+    res.status(201).json(course.scheduledSessions);
+});

@@ -12,7 +12,7 @@ export const getTeacherOverview = asyncHandler(async (req, res) => {
             ? req.query.teacherId
             : req.user._id;
 
-    const courses = await Course.find({ teacherId }).select("title");
+    const courses = await Course.find({ teacherId }).select("title averageRating");
     const courseIds = courses.map((course) => course._id);
     const modules = await Module.find({ courseId: { $in: courseIds } }).select(
         "courseId title"
@@ -33,6 +33,24 @@ export const getTeacherOverview = asyncHandler(async (req, res) => {
 
     const totalCompletion = enrollments.reduce((sum, e) => sum + (e.progressPercent || 0), 0);
     const averageCompletion = enrollments.length === 0 ? 0 : Math.round(totalCompletion / enrollments.length);
+
+    // Calculate unique learners
+    const totalLearners = new Set(enrollments.map(e => e.studentId.toString())).size;
+
+    // Calculate active weekly learners (enrolled or updated in last 7 days)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const activeWeeklyLearners = new Set(
+        enrollments
+            .filter(e => new Date(e.updatedAt) >= sevenDaysAgo || new Date(e.enrolledAt) >= sevenDaysAgo)
+            .map(e => e.studentId.toString())
+    ).size;
+
+    const totalCertificates = enrollments.filter(e => e.status === "completed").length;
+
+    // Calculate Global Average Rating
+    const totalRating = courses.reduce((sum, c) => sum + (c.averageRating || 0), 0);
+    const globalAverageRating = courses.length === 0 ? 0 : Number((totalRating / courses.length).toFixed(1));
 
     // Monthly engagement for the last 12 months
     const now = new Date();
@@ -111,15 +129,40 @@ export const getTeacherOverview = asyncHandler(async (req, res) => {
         })
         .sort((a, b) => a.averageScore - b.averageScore)[0] || null;
 
+    // Weekly engagement for the last 12 weeks
+    const weeks = [];
+    for (let i = 11; i >= 0; i--) {
+        const weekStart = new Date(now);
+        weekStart.setDate(weekStart.getDate() - i * 7);
+        weekStart.setHours(0, 0, 0, 0);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 7);
+        const label = `${weekStart.getDate()} ${weekStart.toLocaleString('default', { month: 'short' })}`;
+        weeks.push({ week: label, start: weekStart, end: weekEnd, count: 0 });
+    }
+
+    enrollments.forEach(e => {
+        const ed = new Date(e.enrolledAt);
+        const weekIdx = weeks.findIndex(w => ed >= w.start && ed < w.end);
+        if (weekIdx !== -1) weeks[weekIdx].count++;
+    });
+
+    const weeklyEngagement = weeks.map(w => ({ week: w.week, count: w.count }));
+
     res.json({
         stats: {
             totalCourses: courses.length,
             totalModules: modules.length,
             totalEnrollments: enrollments.length,
+            totalLearners,
+            activeWeeklyLearners,
+            totalCertificates,
+            globalAverageRating,
             averageQuizScore,
             averageCompletion,
         },
         monthlyEngagement: months,
+        weeklyEngagement,
         hardestQuiz,
         coursePerformance,
         courses,

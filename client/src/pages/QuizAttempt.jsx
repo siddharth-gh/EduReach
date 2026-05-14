@@ -7,7 +7,7 @@ import AppShell from "../layouts/AppShell";
 
 const QuizAttempt = () => {
   const { t } = useTranslation();
-  const { quizId } = useParams();
+  const { quizId, lectureId } = useParams();
   const navigate = useNavigate();
   const { user, setCurrentUser } = useAuth();
   
@@ -27,6 +27,13 @@ const QuizAttempt = () => {
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   useEffect(() => {
+    if (lectureId) {
+      setIsAdaptive(true);
+      setQuiz({ title: "Adaptive Learning Session", description: "AI-powered assessment tailored to your mastery level." });
+      startAdaptiveSession(lectureId);
+      return;
+    }
+
     const fetchQuiz = async () => {
       try {
         const response = await API.get(`/quizzes/${quizId}`);
@@ -42,7 +49,7 @@ const QuizAttempt = () => {
       }
     };
     fetchQuiz();
-  }, [quizId]);
+  }, [quizId, lectureId]);
 
   const startAdaptiveSession = async (lectureId) => {
     try {
@@ -116,7 +123,7 @@ const QuizAttempt = () => {
     </AppShell>
   );
 
-  if (!quiz || (isAdaptive && !adaptiveQuestion && adaptiveSession?.status !== 'completed')) return <AppShell><div className="max-w-3xl mx-auto px-4 py-20 animate-pulse"><div className="h-12 bg-gray-200 dark:bg-gray-800 rounded-2xl w-3/4 mb-10"></div><div className="space-y-6"><div className="h-40 bg-gray-100 dark:bg-gray-800/50 rounded-[40px]"></div></div></div></AppShell>;
+  if (!quiz || (isAdaptive && !adaptiveQuestion && adaptiveSession?.status !== 'completed')) return <AppShell><div className="max-w-3xl mx-auto px-4 py-20 animate-pulse"><div className="h-12 bg-surface-muted rounded-2xl w-3/4 mb-10"></div><div className="space-y-6"><div className="h-40 bg-surface-soft/50 rounded-[40px]"></div></div></div></AppShell>;
 
   // --- ADAPTIVE RENDER ---
   if (isAdaptive) {
@@ -142,10 +149,10 @@ const QuizAttempt = () => {
                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-blue-600/10 blur-[100px] rounded-full -z-10" />
                
                <div className="relative inline-block mb-8">
-                  <div className="w-40 h-40 rounded-full border-[12px] border-gray-100 dark:border-gray-800 flex items-center justify-center relative overflow-hidden">
+                  <div className="w-40 h-40 rounded-full border-[12px] border-border flex items-center justify-center relative overflow-hidden">
                      <div className="absolute inset-0 bg-blue-600/5" />
                      <div className="text-center relative">
-                        <span className="block text-5xl font-black text-gray-900 dark:text-white leading-none">{adaptiveSession.score}</span>
+                        <span className="block text-5xl font-black text-primary leading-none">{adaptiveSession.score}</span>
                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Mastery Rating</span>
                      </div>
                   </div>
@@ -154,7 +161,7 @@ const QuizAttempt = () => {
                   </div>
                </div>
 
-               <h1 className="text-4xl font-black text-gray-900 dark:text-white mb-4">Assessment Complete</h1>
+               <h1 className="text-4xl font-black text-primary mb-4">Assessment Complete</h1>
                <p className="text-lg text-gray-500 max-w-xl mx-auto mb-10">
                   You successfully navigated {adaptiveSession.answeredCount} questions. 
                </p>
@@ -163,11 +170,11 @@ const QuizAttempt = () => {
                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
                   <div className="p-6 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/20 rounded-3xl text-left">
                      <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Strongest Topic</p>
-                     <p className="text-lg font-bold text-gray-900 dark:text-white truncate">{topStrong}</p>
+                     <p className="text-lg font-bold text-primary truncate">{topStrong}</p>
                   </div>
                   <div className="p-6 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/20 rounded-3xl text-left">
                      <p className="text-[10px] font-black text-red-600 uppercase tracking-widest mb-1">Needs Focus</p>
-                     <p className="text-lg font-bold text-gray-900 dark:text-white truncate">{topWeak}</p>
+                     <p className="text-lg font-bold text-primary truncate">{topWeak}</p>
                   </div>
                </div>
             </header>
@@ -175,7 +182,7 @@ const QuizAttempt = () => {
             {/* Question Breakdown */}
             <div className="space-y-6 mb-16">
                <div className="flex items-center justify-between mb-8">
-                  <h3 className="text-2xl font-black text-gray-900 dark:text-white">Question Review</h3>
+                  <h3 className="text-2xl font-black text-primary">Question Review</h3>
                   <div className="flex gap-4">
                      <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500" /><span className="text-[10px] font-bold text-gray-400 uppercase">Correct</span></div>
                      <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-500" /><span className="text-[10px] font-bold text-gray-400 uppercase">Incorrect</span></div>
@@ -193,7 +200,7 @@ const QuizAttempt = () => {
                              <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{ans.difficulty} • {ans.concept}</span>
                              <span className={`text-[9px] font-black uppercase tracking-widest ${ans.isCorrect ? 'text-emerald-500' : 'text-red-500'}`}>{ans.isCorrect ? 'Correct' : 'Incorrect'}</span>
                           </div>
-                          <h4 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">{ans.question}</h4>
+                          <h4 className="text-lg font-bold text-primary leading-tight">{ans.question}</h4>
                        </div>
                     </div>
 
@@ -207,7 +214,7 @@ const QuizAttempt = () => {
                               className={`p-4 rounded-2xl text-xs font-bold border ${
                                 isCorrectOption ? 'bg-emerald-500 text-white border-emerald-500' : 
                                 isUserSelection ? 'bg-red-500 text-white border-red-500' : 
-                                'bg-gray-50 dark:bg-gray-800 text-gray-500 border-transparent'
+                                'bg-surface text-gray-500 border-transparent'
                               }`}
                             >
                                <span className="opacity-60 mr-2">{String.fromCharCode(65 + oIdx)}.</span> {opt}
@@ -217,8 +224,8 @@ const QuizAttempt = () => {
                     </div>
 
                     {(ans.explanation || ans.remediationHint) && (
-                      <div className="ml-12 p-6 bg-white dark:bg-gray-900/50 rounded-3xl border border-black/5 dark:border-white/5">
-                         <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed mb-2"><span className="font-black text-gray-900 dark:text-white uppercase text-[9px] tracking-widest mr-2">Explanation:</span> {ans.explanation}</p>
+                      <div className="ml-12 p-6 bg-surface/50 rounded-3xl border border-black/5 dark:border-white/5">
+                         <p className="text-xs text-secondary leading-relaxed mb-2"><span className="font-black text-primary uppercase text-[9px] tracking-widest mr-2">Explanation:</span> {ans.explanation}</p>
                          {ans.remediationHint && <p className="text-xs text-blue-500 italic"><span className="font-black uppercase text-[9px] tracking-widest mr-2">Pro Tip:</span> {ans.remediationHint}</p>}
                       </div>
                     )}
@@ -228,7 +235,7 @@ const QuizAttempt = () => {
 
             {/* Action Bar */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-               <button onClick={() => window.location.reload()} className="w-full sm:w-auto px-10 py-5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white border-2 border-gray-100 dark:border-gray-800 font-black rounded-2xl shadow-xl transition-all transform hover:-translate-y-1">
+               <button onClick={() => window.location.reload()} className="w-full sm:w-auto px-10 py-5 bg-surface text-primary border-2 border-border font-black rounded-2xl shadow-xl transition-all transform hover:-translate-y-1">
                  Practice Again
                </button>
                <button onClick={() => navigate(-1)} className="w-full sm:w-auto px-12 py-5 bg-blue-600 text-white font-black rounded-2xl shadow-xl shadow-blue-600/20 transition-all transform hover:-translate-y-1">
@@ -247,21 +254,21 @@ const QuizAttempt = () => {
               <div className="flex items-center gap-4">
                  <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white text-xl">🧠</div>
                  <div>
-                    <h2 className="text-xl font-black text-gray-900 dark:text-white leading-none">Adaptive Quiz</h2>
+                    <h2 className="text-xl font-black text-primary leading-none">Adaptive Quiz</h2>
                     <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Level: {adaptiveQuestion.difficulty}</p>
                  </div>
               </div>
               <div className="text-right">
                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Step {adaptiveQuestion.questionNumber} / {adaptiveQuestion.totalQuestions}</p>
-                 <div className="w-32 h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                 <div className="w-32 h-2 bg-surface-soft rounded-full overflow-hidden">
                     <div className="h-full bg-blue-600 transition-all duration-500" style={{ width: `${(adaptiveQuestion.questionNumber / adaptiveQuestion.totalQuestions) * 100}%` }} />
                  </div>
               </div>
            </div>
 
            <div className={`transition-all duration-500 ease-in-out ${isTransitioning ? 'opacity-0 translate-y-4 scale-95' : 'opacity-100 translate-y-0 scale-100'}`}>
-              <div className="bg-white dark:bg-gray-900 p-10 rounded-[48px] border border-gray-100 dark:border-gray-800 shadow-2xl shadow-blue-600/5 mb-8">
-                 <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-10 leading-tight">
+              <div className="bg-surface p-10 rounded-[48px] border border-border shadow-2xl shadow-blue-600/5 mb-8">
+                 <h3 className="text-2xl font-bold text-primary mb-10 leading-tight">
                    {adaptiveQuestion.question}
                  </h3>
 
@@ -271,13 +278,13 @@ const QuizAttempt = () => {
                        key={i} 
                        onClick={() => handleAdaptiveSubmit(i)}
                        disabled={isSubmittingAdaptive || isTransitioning}
-                       className="p-6 text-left rounded-3xl border-2 border-gray-100 dark:border-gray-800 hover:border-blue-300 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-all font-bold group relative"
+                       className="p-6 text-left rounded-3xl border-2 border-border hover:border-blue-300 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-all font-bold group relative"
                       >
                         <div className="flex items-center">
-                           <span className="w-8 h-8 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-500 group-hover:bg-blue-600 group-hover:text-white flex items-center justify-center mr-4 text-xs font-black transition-colors">
+                           <span className="w-8 h-8 rounded-xl bg-surface-soft text-gray-500 group-hover:bg-blue-600 group-hover:text-white flex items-center justify-center mr-4 text-xs font-black transition-colors">
                               {String.fromCharCode(65 + i)}
                            </span>
-                           <span className="flex-1 text-gray-700 dark:text-gray-300 group-hover:text-blue-600 transition-colors">{opt}</span>
+                           <span className="flex-1 text-secondary group-hover:text-blue-600 transition-colors">{opt}</span>
                         </div>
                       </button>
                     ))}
@@ -303,25 +310,25 @@ const QuizAttempt = () => {
         <button onClick={() => navigate(-1)} className="mb-8 text-sm font-bold text-gray-400 hover:text-blue-600 transition-colors uppercase tracking-widest">← Back</button>
 
         <header className="mb-12">
-           <h1 className="text-4xl font-black text-gray-900 dark:text-white mb-4">{quiz.title}</h1>
-           <p className="text-lg text-gray-500 dark:text-gray-400">{quiz.description}</p>
+           <h1 className="text-4xl font-black text-primary mb-4">{quiz.title}</h1>
+           <p className="text-lg text-secondary">{quiz.description}</p>
         </header>
 
         <form onSubmit={handleSubmitStatic} className="space-y-8">
            {quiz.questions.map((question, qIndex) => (
-             <article key={qIndex} className="bg-white dark:bg-gray-900 p-8 lg:p-10 rounded-[40px] border border-gray-100 dark:border-gray-800 shadow-xl shadow-blue-600/5">
+             <article key={qIndex} className="bg-surface p-8 lg:p-10 rounded-[40px] border border-border shadow-xl shadow-blue-600/5">
                 <div className="flex gap-4 mb-8">
-                   <span className="w-8 h-8 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-xs font-black text-gray-400 shrink-0">{qIndex + 1}</span>
-                   <h3 className="text-xl font-bold text-gray-900 dark:text-white leading-tight">{question.questionText}</h3>
+                   <span className="w-8 h-8 rounded-xl bg-surface-soft flex items-center justify-center text-xs font-black text-gray-400 shrink-0">{qIndex + 1}</span>
+                   <h3 className="text-xl font-bold text-primary leading-tight">{question.questionText}</h3>
                 </div>
                 <div className="grid grid-cols-1 gap-3">
                    {question.options.map((option, oIndex) => (
                      <label 
                       key={oIndex} 
-                      className={`flex items-center gap-4 p-5 rounded-2xl border-2 transition-all cursor-pointer font-bold ${selectedAnswers[qIndex] === oIndex ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-600' : 'border-gray-50 dark:border-gray-800 hover:border-gray-200 dark:hover:border-gray-700 text-gray-700 dark:text-gray-300'}`}
+                      className={`flex items-center gap-4 p-5 rounded-2xl border-2 transition-all cursor-pointer font-bold ${selectedAnswers[qIndex] === oIndex ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-600' : 'border-gray-50 dark:border-gray-800 hover:border-gray-200 dark:hover:border-gray-700 text-secondary'}`}
                      >
                        <input type="radio" className="hidden" name={`question-${qIndex}`} checked={selectedAnswers[qIndex] === oIndex} onChange={() => setSelectedAnswers(curr => ({ ...curr, [qIndex]: oIndex }))} />
-                       <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-[10px] ${selectedAnswers[qIndex] === oIndex ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-200 dark:border-gray-700'}`}>{selectedAnswers[qIndex] === oIndex && '✓'}</span>
+                       <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-[10px] ${selectedAnswers[qIndex] === oIndex ? 'border-blue-600 bg-blue-600 text-white' : 'border-border'}`}>{selectedAnswers[qIndex] === oIndex && '✓'}</span>
                        <span className="text-sm">{option}</span>
                      </label>
                    ))}

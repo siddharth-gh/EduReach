@@ -63,6 +63,30 @@ const courseSchema = new mongoose.Schema(
                 default: "webrtc",
             },
         },
+        ratings: [
+            {
+                userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+                rating: { type: Number, required: true, min: 1, max: 5 },
+                review: { type: String, trim: true },
+                createdAt: { type: Date, default: Date.now },
+            },
+        ],
+        averageRating: {
+            type: Number,
+            default: 0,
+        },
+        totalDurationMinutes: {
+            type: Number,
+            default: 0,
+        },
+        scheduledSessions: [
+            {
+                title: { type: String, required: true },
+                scheduledAt: { type: Date, required: true },
+                duration: { type: Number, default: 60 }, // in minutes
+                createdAt: { type: Date, default: Date.now },
+            },
+        ],
     },
     {
         timestamps: true,

@@ -38,7 +38,7 @@ const buildIceServers = () => {
 };
 
 const getSocketBaseUrl = () => {
-  const url = "http://34.204.170.9:5000/api";
+  const url = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
   return url.replace(/\/api\/?$/, "");
 };
 

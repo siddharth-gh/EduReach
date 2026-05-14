@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import API from "../api/api";
 import { useAuth } from "../app/useAuth";
 import AppShell from "../layouts/AppShell";
 import { findOfflineLecture } from "../utils/offlinePack";
 
-const inferResourceType = (resource) => {
-  if (resource.type) return resource.type;
-  const value = `${resource.originalFilename || ""} ${resource.url || ""}`.toLowerCase();
-  if (value.includes(".pdf")) return "pdf";
-  if (value.includes(".txt") || value.includes("text/plain")) return "text";
-  return "file";
-};
+
+  const isLocalUrl = (url) => {
+    try {
+      const parsed = new URL(url);
+      return parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname.startsWith('192.168.');
+    } catch { return false; }
+  };
 
 const formatVideoSize = (bytes) => {
   if (!bytes) return "";
@@ -25,20 +26,15 @@ const formatVideoSize = (bytes) => {
   return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
 };
 
-const getCompressionSavings = (originalSize, optimizedSize) => {
-  if (!originalSize || !optimizedSize || optimizedSize >= originalSize) return null;
-  return Math.round(((originalSize - optimizedSize) / originalSize) * 100);
-};
-
 const UnifiedPlayer = ({ item }) => {
+  const { t } = useTranslation();
   const [currentMode, setCurrentMode] = useState("auto"); // auto, original, optimized, audio
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [detectedSpeed, setDetectedSpeed] = useState(null);
   const [autoQuality, setAutoQuality] = useState("optimized");
   const [isChangingMode, setIsChangingMode] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const videoRef = useRef(null);
+  const mediaRef = useRef(null);
 
   const optimizedReady = Boolean(item.optimizedUrl);
   const audioReady = Boolean(item.audioOnlyUrl);
@@ -48,13 +44,13 @@ const UnifiedPlayer = ({ item }) => {
 
   if (currentMode === "auto") {
     effectiveSource = autoQuality === "optimized" && optimizedReady ? item.optimizedUrl : item.url;
-    modeLabel = `Auto (${autoQuality === "optimized" ? "H.264" : "Original"})`;
+    modeLabel = `Auto (${autoQuality === "optimized" ? "H.264" : t("lectureViewer.original") || "Original"})`;
   } else if (currentMode === "optimized" && optimizedReady) {
     effectiveSource = item.optimizedUrl;
     modeLabel = "H.264 Optimized";
   } else if (currentMode === "audio" && audioReady) {
     effectiveSource = item.audioOnlyUrl;
-    modeLabel = "Audio Only";
+    modeLabel = t("lectureViewer.audioOnly") || "Audio Only";
   }
 
   useEffect(() => {
@@ -83,163 +79,134 @@ const UnifiedPlayer = ({ item }) => {
   }, [item.url, item.optimizedUrl, optimizedReady]);
 
   const handleModeChange = (newMode) => {
+    if (mediaRef.current) setCurrentTime(mediaRef.current.currentTime);
     setIsChangingMode(true);
     setCurrentMode(newMode);
     setTimeout(() => setIsChangingMode(false), 100);
   };
 
   useEffect(() => {
-    if (videoRef.current && currentTime > 0) {
-      videoRef.current.currentTime = currentTime;
-      videoRef.current.play().catch(() => null);
+    if (mediaRef.current && currentTime > 0) {
+      mediaRef.current.currentTime = currentTime;
+      mediaRef.current.play().catch(() => null);
     }
-  }, [effectiveSource]);
-
-  const formatTime = (seconds) => {
-    if (!seconds) return "0:00";
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  };
+  }, [effectiveSource, currentMode]);
 
   return (
-    <div className="bg-black rounded-3xl overflow-hidden shadow-2xl relative group">
-      <div className="aspect-video relative">
-        <video
-          ref={videoRef}
-          key={effectiveSource}
-          className={`w-full h-full object-contain ${currentMode === "audio" ? "opacity-20 blur-sm" : ""}`}
-          controls
-          poster={item.thumbnailUrl}
-          preload="none"
-          src={effectiveSource}
-          onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
-          onLoadedMetadata={(e) => setDuration(e.target.duration)}
-        >
-          Your browser does not support video playback.
-        </video>
-        
-        {currentMode === "audio" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-white text-center p-6">
-            <div className="text-6xl mb-4 animate-pulse">📻</div>
-            <p className="text-xl font-bold">Audio Mode Enabled</p>
-            <p className="text-sm text-gray-400 mt-2">Maximum data savings for low bandwidth areas</p>
-          </div>
-        )}
-
-        {isChangingMode && (
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center text-white font-bold">
-            Switching Quality...
-          </div>
-        )}
-      </div>
-
-      <div className="bg-gray-900/90 backdrop-blur-xl p-4 lg:p-6 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="flex flex-col">
-            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Quality</span>
-            <select 
-              className="bg-gray-800 text-white text-xs font-bold px-3 py-2 rounded-xl border-none focus:ring-2 focus:ring-blue-500"
-              value={currentMode} 
-              onChange={(e) => handleModeChange(e.target.value)}
+    <>
+      {audioReady && (
+        <div className="flex justify-center mb-6">
+          <div className="inline-flex p-1 bg-surface-muted rounded-full border border-border shadow-inner">
+            <button 
+              onClick={() => handleModeChange('auto')}
+              className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${currentMode !== 'audio' ? 'bg-accent text-white shadow-lg shadow-accent/20' : 'text-secondary hover:bg-surface'}`}
             >
-              <option value="auto">Auto Select</option>
-              <option value="original">High ({formatVideoSize(item.originalSize)})</option>
-              {optimizedReady && <option value="optimized">Compressed ({formatVideoSize(item.optimizedSize)})</option>}
-              {audioReady && <option value="audio">Audio Only ({formatVideoSize(item.audioOnlySize)})</option>}
-            </select>
-          </div>
-
-          <div className="flex flex-col">
-            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Speed</span>
-            <select 
-              className="bg-gray-800 text-white text-xs font-bold px-3 py-2 rounded-xl border-none focus:ring-2 focus:ring-blue-500"
-              value={playbackSpeed} 
-              onChange={(e) => {
-                const val = parseFloat(e.target.value);
-                setPlaybackSpeed(val);
-                if (videoRef.current) videoRef.current.playbackRate = val;
-              }}
+              <span>📺 Video Mode</span>
+            </button>
+            <button 
+              onClick={() => handleModeChange('audio')}
+              className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${currentMode === 'audio' ? 'bg-accent text-white shadow-lg shadow-accent/20' : 'text-secondary hover:bg-surface'}`}
             >
-              <option value="0.5">0.5x</option>
-              <option value="1">1.0x</option>
-              <option value="1.25">1.25x</option>
-              <option value="1.5">1.5x</option>
-              <option value="2">2.0x</option>
-            </select>
+              <span>🎧 Audio Only</span>
+            </button>
           </div>
-        </div>
-
-        <div className="flex items-center gap-6">
-           <div className="text-right">
-              <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">{modeLabel}</p>
-              {detectedSpeed && <p className="text-xs font-bold text-white">{detectedSpeed} Mbps detected</p>}
-           </div>
-           <div className="text-right hidden sm:block">
-              <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Progress</p>
-              <p className="text-xs font-bold text-white">{formatTime(currentTime)} / {formatTime(duration)}</p>
-           </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const ResourcePreview = ({ resource }) => {
-  const resourceType = inferResourceType(resource);
-  const [textContent, setTextContent] = useState("");
-  const [loadingText, setLoadingText] = useState(false);
-
-  useEffect(() => {
-    if (resourceType !== "text") return;
-    const controller = new AbortController();
-    const loadText = async () => {
-      setLoadingText(true);
-      try {
-        const response = await fetch(resource.url, { signal: controller.signal });
-        if (response.ok) setTextContent(await response.text());
-      } catch {} finally { setLoadingText(false); }
-    };
-    loadText();
-    return () => controller.abort();
-  }, [resourceType, resource.url]);
-
-  return (
-    <article className="bg-white dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 rounded-3xl p-6 transition-all hover:border-blue-500/50">
-      <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
-        <div>
-          <span className="px-3 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[10px] font-black rounded-full uppercase tracking-widest mb-2 inline-block">
-            {resourceType}
-          </span>
-          <h4 className="text-lg font-bold text-gray-900 dark:text-white">{resource.title}</h4>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{resource.originalFilename}</p>
-        </div>
-        <div className="flex gap-2">
-          <a href={resource.url} target="_blank" rel="noreferrer" className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-bold rounded-xl hover:bg-gray-200 transition-all">Open</a>
-          <a href={resource.url} download={resource.originalFilename || resource.title} className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-all">Download</a>
-        </div>
-      </div>
-
-      {resourceType === "pdf" && (
-        <div className="rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-800 h-96 bg-gray-50 dark:bg-gray-900">
-          <object data={resource.url} type="application/pdf" className="w-full h-full">
-            <p className="p-8 text-center text-sm text-gray-400 italic">PDF preview unavailable. Use download button.</p>
-          </object>
         </div>
       )}
 
-      {resourceType === "text" && (
-        <div className="rounded-2xl bg-gray-50 dark:bg-gray-900 p-6 max-h-96 overflow-y-auto">
-          {loadingText ? <p className="text-sm text-gray-400 italic">Loading preview...</p> : (
-            <pre className="text-xs font-mono text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{textContent}</pre>
+      <div className="bg-black rounded-[24px] overflow-hidden shadow-2xl relative group border border-white/5 max-w-5xl mx-auto">
+        <div className={`relative ${currentMode === 'audio' ? 'p-12 bg-gray-900 flex flex-col items-center justify-center min-h-[300px]' : 'aspect-video'}`}>
+          
+          {currentMode !== "audio" ? (
+            <video
+              ref={mediaRef}
+              key={effectiveSource}
+              className="w-full h-full object-contain"
+              controls
+              poster={item.thumbnailUrl}
+              preload="none"
+              src={effectiveSource}
+              onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
+            >
+              Your browser does not support video playback.
+            </video>
+          ) : (
+            <div className="flex flex-col items-center gap-8 w-full animate-in fade-in duration-700">
+               <div className="w-24 h-24 bg-accent/20 rounded-full flex items-center justify-center animate-pulse border border-accent/30 shadow-[0_0_30px_rgba(37,99,235,0.3)]">
+                  <span className="text-5xl">📻</span>
+               </div>
+               <div className="text-center">
+                  <p className="text-2xl font-black text-white tracking-tight mb-2">{t("lectureViewer.audioModeEnabled") || "Audio Only Streaming"}</p>
+                  <p className="text-xs font-bold text-gray-400 max-w-xs mx-auto">{t("lectureViewer.maxDataSavings") || "Saving bandwidth by playing audio only."}</p>
+               </div>
+               <audio
+                 ref={mediaRef}
+                 key={effectiveSource}
+                 src={effectiveSource}
+                 controls
+                 className="w-full max-w-md accent-accent"
+                 onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
+               />
+            </div>
+          )}
+
+          {isChangingMode && (
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center text-white font-black z-30">
+              <div className="w-8 h-8 border-4 border-white/20 border-t-white rounded-full animate-spin mb-4" />
+              <p className="text-[10px] uppercase tracking-[0.2em]">{t("lectureViewer.switchingQuality") || "Switching Streaming Mode..."}</p>
+            </div>
           )}
         </div>
-      )}
-    </article>
+
+        <div className="bg-gray-900/95 backdrop-blur-xl p-4 lg:p-6 flex flex-wrap items-center justify-between gap-4 border-t border-white/5">
+          <div className="flex items-center gap-4">
+            <div className="flex flex-col">
+              <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">{t("lectureViewer.quality")}</span>
+              <select 
+                className="bg-gray-800 text-white text-[10px] font-black px-4 py-2 rounded-xl border-none focus:ring-2 focus:ring-accent appearance-none cursor-pointer hover:bg-gray-700 transition-colors"
+                value={currentMode} 
+                onChange={(e) => handleModeChange(e.target.value)}
+              >
+                <option value="auto">{t("lectureViewer.autoSelect")}</option>
+                <option value="original">High ({formatVideoSize(item.originalSize)})</option>
+                {optimizedReady && <option value="optimized">Compressed ({formatVideoSize(item.optimizedSize)})</option>}
+                {audioReady && <option value="audio">Audio Only ({formatVideoSize(item.audioOnlySize)})</option>}
+              </select>
+            </div>
+
+            <div className="flex flex-col">
+              <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">{t("lectureViewer.speed")}</span>
+              <select 
+                className="bg-gray-800 text-white text-[10px] font-black px-4 py-2 rounded-xl border-none focus:ring-2 focus:ring-accent appearance-none cursor-pointer hover:bg-gray-700 transition-colors"
+                value={playbackSpeed} 
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setPlaybackSpeed(val);
+                  if (mediaRef.current) mediaRef.current.playbackRate = val;
+                }}
+              >
+                <option value="0.5">0.5x</option>
+                <option value="1">1.0x</option>
+                <option value="1.25">1.25x</option>
+                <option value="1.5">1.5x</option>
+                <option value="2">2.0x</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-6 text-right">
+             <div>
+                <p className="text-[10px] font-black text-accent uppercase tracking-widest mb-1">{modeLabel}</p>
+                {detectedSpeed && <p className="text-[10px] font-bold text-gray-400">{detectedSpeed} Mbps detected</p>}
+             </div>
+          </div>
+        </div>
+      </div>
+    </>
   );
 };
 
 const LectureViewer = () => {
+  const { t } = useTranslation();
   const { lectureId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -255,19 +222,19 @@ const LectureViewer = () => {
   const [noteMessage, setNoteMessage] = useState("");
   const [isSavingNote, setIsSavingNote] = useState(false);
   const [transcriptOnlyMode, setTranscriptOnlyMode] = useState(false);
-  const [assistantMessages, setAssistantMessages] = useState([
-    { role: "assistant", content: "Ask for practice MCQs or doubts from this lecture and I will stay grounded in the lecture context." }
-  ]);
-  const [assistantInput, setAssistantInput] = useState("");
-  const [isSendingAssistant, setIsSendingAssistant] = useState(false);
-  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   
-  const [adaptiveSessionId, setAdaptiveSessionId] = useState("");
-  const [adaptiveSession, setAdaptiveSession] = useState(null);
-  const [adaptiveQuestion, setAdaptiveQuestion] = useState(null);
-  const [adaptiveFeedback, setAdaptiveFeedback] = useState(null);
-  const [selectedAdaptiveAnswer, setSelectedAdaptiveAnswer] = useState(null);
-  const [isSubmittingAdaptive, setIsSubmittingAdaptive] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
+  const [showAssistant, setShowAssistant] = useState(false);
+  const [mediaTab, setMediaTab] = useState("summary"); // 'transcript' or 'summary'
+  const [showTranscriptBelow, setShowTranscriptBelow] = useState(true);
+
+  // Chat State
+  const [chatQuery, setChatQuery] = useState("");
+  const [chatMessages, setChatMessages] = useState([]);
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const chatScrollRef = useRef(null);
+
+
 
   const [courseOutline, setCourseOutline] = useState(null);
   const [outlineModules, setOutlineModules] = useState([]);
@@ -277,7 +244,6 @@ const LectureViewer = () => {
   const [outlineLoading, setOutlineLoading] = useState(true);
 
   const currentIndex = lectureList.findIndex((item) => item._id === lectureId);
-  const prevLecture = lectureList[currentIndex - 1];
   const nextLecture = lectureList[currentIndex + 1];
 
   useEffect(() => {
@@ -288,6 +254,10 @@ const LectureViewer = () => {
         
         const [lecRes, noteRes] = await Promise.all(requests);
         const loadedLecture = lecRes.data;
+        if (!loadedLecture) {
+          setError("Lecture not found");
+          return;
+        }
         setLecture(loadedLecture);
         setTranscriptOnlyMode(user?.preferredMode === "low-bandwidth" && Boolean(loadedLecture.transcript?.text));
         if (noteRes?.data?.content) setNote(noteRes.data.content);
@@ -331,8 +301,13 @@ const LectureViewer = () => {
       }
     };
     loadLecture();
-    localStorage.setItem(`lecture-${lectureId}`, "done");
   }, [lectureId, isAuthenticated, user?.role, user?.preferredMode]);
+
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [chatMessages]);
 
   const handleMarkComplete = async () => {
     setIsMarkingComplete(true);
@@ -349,550 +324,537 @@ const LectureViewer = () => {
     try {
       await API.put(`/notes/lecture/${lectureId}`, { content: note });
       setNoteMessage("Note saved!");
+      setTimeout(() => setNoteMessage(""), 3000);
     } catch { setNoteMessage("Failed to save note"); }
     finally { setIsSavingNote(false); }
   };
 
-  const handleAssistantSubmit = async (e) => {
-    e.preventDefault();
-    if (!assistantInput.trim()) return;
-    const nextMessages = [...assistantMessages, { role: "user", content: assistantInput.trim() }];
-    setAssistantMessages(nextMessages);
-    setAssistantInput("");
-    setIsSendingAssistant(true);
+  const handleSendChatQuery = async (queryOverride) => {
+    const query = queryOverride || chatQuery;
+    if (!query.trim() || isChatLoading) return;
+
+    const newMessage = { role: "user", content: query };
+    setChatMessages(prev => [...prev, newMessage]);
+    setChatQuery("");
+    setIsChatLoading(true);
+
     try {
       const res = await API.post(`/lectures/single/${lectureId}/ai-chat`, {
-        messages: nextMessages.map(m => ({ role: m.role, content: m.content }))
+        messages: [...chatMessages, newMessage]
       });
-      setAssistantMessages(curr => [...curr, { role: "assistant", content: res.data.reply || "No response.", mcqs: res.data.mcqs || [] }]);
-    } catch { setAssistantMessages(curr => [...curr, { role: "assistant", content: "AI is currently unavailable." }]); }
-    finally { setIsSendingAssistant(false); }
-  };
-
-  const handleStartAdaptivePractice = async () => {
-    try {
-      const res = await API.post(`/adaptive-quizzes/lectures/${lectureId}/start`);
-      setAdaptiveSessionId(res.data.sessionId);
-      setAdaptiveSession(res.data.session);
-      setAdaptiveQuestion(res.data.currentQuestion);
-    } catch {
-      // Offline fallback: Use the pre-cached AI question bank
-      if (lecture?.aiQuestionBank?.questions?.length > 0) {
-        const q = lecture.aiQuestionBank.questions[0];
-        setAdaptiveSessionId("offline-session");
-        setAdaptiveQuestion({
-          id: q._id || "offline-q0",
-          question: q.questionText,
-          options: [q.optionA, q.optionB, q.optionC, q.optionD],
-          questionNumber: 1,
-          totalQuestions: lecture.aiQuestionBank.questions.length,
-          difficulty: "Standard"
-        });
-      }
+      const replyText = res.data.reply || res.data.content || (typeof res.data === 'string' ? res.data : "I'm sorry, I couldn't process that.");
+      setChatMessages(prev => [...prev, { role: "assistant", content: replyText }]);
+    } catch (err) {
+      setChatMessages(prev => [...prev, { role: "assistant", content: "I'm sorry, I encountered an error processing your request." }]);
+    } finally {
+      setIsChatLoading(false);
     }
   };
 
-  const handleSubmitAdaptiveAnswer = async () => {
-    if (selectedAdaptiveAnswer === null) return;
-    setIsSubmittingAdaptive(true);
-    try {
-      const res = await API.post(`/adaptive-quizzes/sessions/${adaptiveSessionId}/answer`, {
-        questionId: adaptiveQuestion.id,
-        selectedAnswer: selectedAdaptiveAnswer,
-        timeTakenSeconds: 30
-      });
-      setAdaptiveFeedback(res.data.feedback);
-      setAdaptiveSession(res.data.session);
-      if (res.data.currentQuestion) {
-        setAdaptiveQuestion(res.data.currentQuestion);
-      }
-      setSelectedAdaptiveAnswer(null);
-    } catch {
-      if (adaptiveSessionId === "offline-session") {
-        const currentIdx = adaptiveQuestion.questionNumber - 1;
-        const qData = lecture.aiQuestionBank.questions[currentIdx];
-        const isCorrect = selectedAdaptiveAnswer === qData.correctAnswer;
-        
-        setAdaptiveFeedback({
-          isCorrect,
-          explanation: qData.explanation
-        });
-
-        // Advance to next question after delay if available
-        if (currentIdx + 1 < lecture.aiQuestionBank.questions.length) {
-          const nextQ = lecture.aiQuestionBank.questions[currentIdx + 1];
-          setTimeout(() => {
-            setAdaptiveQuestion({
-              id: nextQ._id || `offline-q${currentIdx + 1}`,
-              question: nextQ.questionText,
-              options: [nextQ.optionA, nextQ.optionB, nextQ.optionC, nextQ.optionD],
-              questionNumber: currentIdx + 2,
-              totalQuestions: lecture.aiQuestionBank.questions.length,
-              difficulty: "Standard"
-            });
-            setAdaptiveFeedback(null);
-            setSelectedAdaptiveAnswer(null);
-          }, 3000);
-        }
-      }
-    } finally { setIsSubmittingAdaptive(false); }
+  const handleStartAdaptivePractice = () => {
+    navigate(`/adaptive-quiz/${lectureId}`);
   };
 
-  const handleRestartAdaptive = () => {
-    setAdaptiveSession(null);
-    setAdaptiveQuestion(null);
-    setAdaptiveFeedback(null);
-    setSelectedAdaptiveAnswer(null);
-  };
+  if (error) return (
+    <AppShell>
+      <div className="max-w-3xl mx-auto px-4 py-20 text-center">
+        <div className="bg-red-50 border border-red-200 rounded-[32px] p-12 shadow-xl shadow-red-500/5">
+          <div className="w-20 h-20 bg-red-100 text-red-600 rounded-full flex items-center justify-center text-4xl mx-auto mb-8 shadow-sm">⚠️</div>
+          <h2 className="text-2xl font-black text-gray-900 mb-4 uppercase tracking-tight">{error}</h2>
+          <p className="text-sm font-medium text-gray-500 mb-10 max-w-md mx-auto">
+            This lecture could not be loaded. This might be because it's a draft or has been removed.
+          </p>
+          <button 
+            onClick={() => navigate(-1)}
+            className="px-8 py-4 bg-red-600 text-white text-[10px] font-black rounded-2xl uppercase tracking-widest shadow-xl shadow-red-600/20 hover:bg-red-700 transition-all"
+          >
+            Go Back
+          </button>
+        </div>
+      </div>
+    </AppShell>
+  );
 
-  if (!lecture) return <AppShell><div className="max-w-7xl mx-auto px-4 py-20 animate-pulse"><div className="h-96 bg-gray-200 dark:bg-gray-800 rounded-[48px]"></div></div></AppShell>;
+  if (!lecture) return (
+    <AppShell>
+      <div className="max-w-7xl mx-auto px-4 py-20 animate-pulse">
+         <div className="h-10 bg-surface-muted rounded-xl w-32 mb-8"></div>
+         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            <div className="lg:col-span-3 h-[500px] bg-surface rounded-[48px] border border-border"></div>
+            <div className="h-[500px] bg-surface rounded-[48px] border border-border"></div>
+         </div>
+      </div>
+    </AppShell>
+  );
+
+  const mediaContent = [
+    ...(lecture?.contents?.filter(i => i.type === "video" || i.type === "image" || i.type === "pdf" || i.type === "pptx" || i.type === "ppt") || []),
+    ...(lecture?.resources?.filter(i => i.type === "pdf" || i.type === "pptx" || i.type === "ppt") || [])
+  ];
+  const resourceFiles = lecture?.resources || [];
+  const textContent = lecture?.contents?.filter(i => i.type === "text") || [];
+  
+  const isVideo = lecture?.contents?.some(c => c.type === 'video');
+  const hasPDF = lecture?.resources?.some(r => r.type === 'pdf') || lecture?.contents?.some(c => c.type === 'pdf');
+  const hasDoc = lecture?.resources?.some(r => r.type === 'docx' || r.type === 'doc') || lecture?.contents?.some(c => c.type === 'docx' || c.type === 'doc');
 
   return (
-    <AppShell>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-20">
-        <div className="flex flex-col lg:flex-row gap-12 items-start">
-          
-          {/* Main Content Area */}
-          <main className="flex-1 w-full order-1 lg:order-2">
-            
-            {/* Header / Nav */}
-            <div className="flex flex-wrap justify-between items-center gap-4 mb-8">
-               <button onClick={() => navigate(-1)} className="text-sm font-black text-gray-400 uppercase tracking-widest hover:text-blue-600 transition-colors flex items-center gap-2">
-                  ← Back
-               </button>
-               <div className="flex gap-3">
-                  {prevLecture && (
-                    <button 
-                      onClick={() => navigate(`/lecture/${prevLecture._id}`, { state: { lectures: lectureList } })}
-                      className="px-5 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-bold rounded-xl"
-                    >
-                      Previous
-                    </button>
-                  )}
-                  {nextLecture && (
-                    <button 
-                      onClick={() => navigate(`/lecture/${nextLecture._id}`, { state: { lectures: lectureList } })}
-                      className="px-5 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl shadow-lg shadow-blue-600/20"
-                    >
-                      Next Lecture
-                    </button>
-                  )}
-               </div>
-            </div>
-
-            <h1 className="text-3xl lg:text-4xl font-black text-gray-900 dark:text-white mb-8">{lecture.title}</h1>
-
-            {/* Main Player / Content */}
-            <div className="space-y-12 mb-16">
-              {lecture.contents?.sort((a, b) => a.order - b.order).map((item, index) => {
-                if (item.type === "video") {
-                  if (transcriptOnlyMode && lecture.transcript?.text) return null;
-                  return <UnifiedPlayer key={index} item={item} />;
-                }
-                if (item.type === "text") return <p key={index} className="text-lg text-gray-600 dark:text-gray-400 leading-relaxed whitespace-pre-wrap">{item.data}</p>;
-                if (item.type === "image") {
-                  const showImage = user?.preferredMode !== "low-bandwidth" || visibleImages[index];
-                  if (!showImage) return <button key={index} onClick={() => setVisibleImages(curr => ({ ...curr, [index]: true }))} className="w-full py-20 bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-[40px] text-gray-400 font-bold">Click to load image (Low Bandwidth Mode)</button>;
-                  return (
-                    <div key={index} className="rounded-[40px] overflow-hidden border border-gray-100 dark:border-gray-800 shadow-xl">
-                      <img src={item.url} alt="Content" className="w-full h-auto" />
-                    </div>
-                  );
-                }
-                return null;
-              })}
-            </div>
-
-            {/* AI and Transcript Section (Moved Below Content) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16 pt-16 border-t border-gray-100 dark:border-gray-800">
-               {/* AI Summary */}
-               {lecture.aiSummary?.status === "ready" && (
-                 <div className="bg-blue-50/50 dark:bg-blue-900/10 p-8 rounded-[40px] border border-blue-100 dark:border-blue-900/20">
-                    <span className="px-3 py-1 bg-blue-600 text-white text-[10px] font-black rounded-full uppercase tracking-widest mb-4 inline-block">AI Revision Summary</span>
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Quick Insights</h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed mb-6">{lecture.aiSummary.text}</p>
-                    <div className="flex flex-wrap gap-2">
-                       {lecture.aiSummary.keyPoints?.map((p, i) => <span key={i} className="px-4 py-2 bg-white dark:bg-gray-800 text-xs font-bold text-blue-600 dark:text-blue-400 rounded-xl shadow-sm">{p}</span>)}
-                    </div>
-                 </div>
-               )}
-
-               {/* Transcript */}
-               {lecture.transcript?.text && (
-                 <div className="bg-gray-50 dark:bg-gray-900/30 p-8 rounded-[40px] border border-gray-100 dark:border-gray-800">
-                    <div className="flex justify-between items-center mb-6">
-                       <span className="px-3 py-1 bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-[10px] font-black rounded-full uppercase tracking-widest">Transcript</span>
-                       {lecture.contents?.some(i => i.type === "video") && (
-                         <button onClick={() => setTranscriptOnlyMode(!transcriptOnlyMode)} className="text-[10px] font-black text-blue-600 uppercase tracking-widest hover:underline">
-                            {transcriptOnlyMode ? "Show Video" : "Reading Mode"}
-                         </button>
-                       )}
-                    </div>
-                    <div className="max-h-64 overflow-y-auto pr-2 custom-scrollbar">
-                       <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed whitespace-pre-wrap">{lecture.transcript.text}</p>
-                    </div>
-                 </div>
-               )}
-            </div>
-
-            {/* Adaptive Practice */}
-            {lecture.aiQuestionBank?.status === "ready" && lecture.aiQuestionBank.questions?.length > 0 && (
-              <section className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[48px] p-8 lg:p-12 mb-16 shadow-2xl shadow-blue-600/5">
-                 <div className="mb-10 text-center">
-                    <span className="px-3 py-1 bg-orange-500 text-white text-[10px] font-black rounded-full uppercase tracking-widest mb-4 inline-block">Adaptive Practice</span>
-                    <h2 className="text-3xl font-black text-gray-900 dark:text-white">Test Your Knowledge</h2>
-                    <p className="text-sm text-gray-500 mt-2">Personalized questions based on your current understanding.</p>
-                 </div>
-
-                 {!adaptiveQuestion && (!adaptiveSession || adaptiveSession.status !== "completed") ? (
-                   <div className="text-center">
-                      <div className="mb-8 p-10 bg-orange-50 dark:bg-orange-900/10 rounded-[32px] border border-orange-100 dark:border-orange-900/20 inline-block max-w-md">
-                        <p className="text-gray-600 dark:text-gray-400 font-medium mb-6">Start a personalized session that adapts to your performance. We'll identify your gaps and help you master the material.</p>
-                        <button onClick={handleStartAdaptivePractice} className="px-10 py-5 bg-blue-600 text-white font-black rounded-2xl shadow-xl shadow-blue-600/20 transition-all transform hover:-translate-y-1">
-                          Start Practice Session
-                        </button>
-                      </div>
-                   </div>
-                 ) : adaptiveSession?.status === "completed" && !adaptiveFeedback ? (
-                   <div className="animate-in fade-in zoom-in duration-500">
-                      <div className="text-center mb-12">
-                         <div className="inline-flex items-center justify-center w-32 h-32 rounded-full bg-blue-600 text-white text-4xl font-black mb-6 shadow-2xl shadow-blue-600/40 border-8 border-blue-50 dark:border-blue-900/20">
-                            {adaptiveSession.score}
-                         </div>
-                         <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2">Practice Complete!</h3>
-                         <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-2">Mastery Rating: {adaptiveSession.score} / 10</p>
-                         <p className="text-gray-500 font-medium text-xs">You answered {adaptiveSession.correctCount} out of {adaptiveSession.answeredCount} questions correctly.</p>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
-                         {/* Strong Concepts */}
-                         <div className="p-8 bg-green-50/50 dark:bg-green-900/10 rounded-[32px] border border-green-100 dark:border-green-900/20">
-                            <h4 className="text-sm font-black text-green-700 dark:text-green-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-                               <span className="text-lg">🎯</span> Strong Topics
-                            </h4>
-                            <div className="space-y-4">
-                               {adaptiveSession.strongConcepts?.length > 0 ? (
-                                 adaptiveSession.strongConcepts.map((item, i) => (
-                                   <div key={i} className="flex justify-between items-center">
-                                      <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{item.concept}</span>
-                                      <span className="text-xs font-black text-green-600">{item.mastery}%</span>
-                                   </div>
-                                 ))
-                               ) : (
-                                 <p className="text-xs text-gray-400 italic">No strong topics identified yet. Keep practicing!</p>
-                               )}
-                            </div>
-                         </div>
-
-                         {/* Weak Concepts */}
-                         <div className="p-8 bg-red-50/50 dark:bg-red-900/10 rounded-[32px] border border-red-100 dark:border-red-900/20">
-                            <h4 className="text-sm font-black text-red-700 dark:text-red-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-                               <span className="text-lg">⚡</span> Areas to Improve
-                            </h4>
-                            <div className="space-y-4">
-                               {adaptiveSession.weakConcepts?.length > 0 ? (
-                                 adaptiveSession.weakConcepts.map((item, i) => (
-                                   <div key={i} className="flex justify-between items-center">
-                                      <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{item.concept}</span>
-                                      <span className="text-xs font-black text-red-600">{item.mastery}%</span>
-                                   </div>
-                                 ))
-                               ) : (
-                                 <p className="text-xs text-green-600 font-bold italic">Excellent! No major weaknesses found.</p>
-                               )}
-                            </div>
-                         </div>
-                      </div>
-
-                      {/* Suggestions */}
-                      {adaptiveSession.weakConcepts?.length > 0 && (
-                        <div className="mb-12 p-8 bg-blue-50/30 dark:bg-blue-900/5 rounded-[32px] border border-blue-100/50 dark:border-blue-900/10">
-                           <h4 className="text-sm font-black text-blue-600 uppercase tracking-widest mb-6">Learning Path Suggestions</h4>
-                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                              {adaptiveSession.weakConcepts.map((item, i) => (
-                                <div key={i} className="flex gap-4 items-start p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm">
-                                   <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 shrink-0">📖</div>
-                                   <div>
-                                      <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Review</p>
-                                      <p className="text-sm font-bold text-gray-900 dark:text-white">Re-read sections covering "{item.concept}"</p>
-                                   </div>
-                                </div>
+    <AppShell fullWidth>
+      <div className="flex h-[calc(100vh-64px)] overflow-hidden bg-background w-full">
+        
+        {/* Absolute Left Sidebar - Course Outline */}
+        <aside className="w-72 border-r border-border bg-surface flex flex-col flex-shrink-0 relative z-40 no-scrollbar">
+           <div className="p-6 border-b border-border/50">
+              <span className="text-accent font-black text-[9px] uppercase tracking-[0.2em] mb-2 block">{t("lectureViewer.currentCourse")}</span>
+              <h2 className="text-base font-black text-primary leading-tight tracking-tight">{courseOutline?.title}</h2>
+           </div>
+           
+           <div className="flex-1 overflow-y-auto no-scrollbar p-3">
+              {outlineModules.map((m, mIdx) => {
+                const isOpen = openOutlineModule === m._id;
+                return (
+                  <div key={m._id} className="mb-2">
+                     <button 
+                       onClick={() => setOpenOutlineModule(isOpen ? "" : m._id)}
+                       className={`w-full flex items-center justify-between py-2.5 px-4 rounded-xl text-left transition-all duration-300 border ${isOpen ? 'bg-accent/5 text-accent border-accent/20 shadow-sm' : 'text-secondary bg-surface-soft/30 border-border/50 hover:bg-surface-soft hover:border-accent/10'}`}
+                     >
+                        <div className="flex items-center gap-3">
+                           <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-[8px] font-black transition-all ${isOpen ? 'bg-accent text-white' : 'bg-surface-soft text-secondary'}`}>
+                              {String(mIdx + 1).padStart(2, '0')}
+                           </div>
+                           <span className="text-[10px] font-black truncate max-w-[150px] uppercase tracking-widest">{m.title}</span>
+                        </div>
+                        <span className={`text-[10px] font-black transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}>↓</span>
+                     </button>
+                     
+                     {isOpen && (
+                       <div className="mt-2 space-y-1 pl-3 border-l-2 border-accent/10 ml-3 animate-in slide-in-from-left-2 duration-300">
+                          {outlineLectures[m._id]?.map((l, lIdx) => (
+                            <div key={l._id} className="space-y-1">
+                              <button 
+                               onClick={() => navigate(`/lecture/${l._id}`, { state: { lectures: outlineLectures[m._id] } })}
+                               className={`w-full text-left py-2 px-3 rounded-lg text-[10px] transition-all flex items-center justify-between group/sidebar-item border ${l._id === lectureId ? 'bg-accent text-white shadow-lg shadow-accent/10 font-black border-accent' : 'text-secondary hover:text-accent font-bold bg-surface-soft/30 border-border/50 hover:bg-surface-soft hover:border-accent/20'}`}
+                              >
+                                <span className="flex items-center gap-2">
+                                   <span className="opacity-50 text-[8px]">L{lIdx + 1}</span>
+                                   <span className="truncate max-w-[160px]">{l.title}</span>
+                                </span>
+                                {l._id === lectureId && <span className="text-[10px] animate-pulse">●</span>}
+                              </button>
+                              
+                              {outlineQuizzes[m._id]?.filter(q => q.sourceLectureId === l._id).map(q => (
+                                <button 
+                                 key={q._id}
+                                 onClick={() => navigate(`/quiz/${q._id}`)}
+                                 className="ml-5 w-[calc(100%-1.25rem)] text-left py-1.5 px-3 rounded-lg text-[8px] font-black text-warning bg-warning/5 hover:bg-warning/10 transition-all flex items-center gap-2 border border-warning/5"
+                                >
+                                  <span>📝</span>
+                                  <span className="truncate">{q.title}</span>
+                                </button>
                               ))}
-                              <div className="flex gap-4 items-start p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm">
-                                 <div className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 shrink-0">✨</div>
-                                 <div>
-                                    <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Next Step</p>
-                                    <p className="text-sm font-bold text-gray-900 dark:text-white">Ask AI Assistant about your weak topics</p>
+                            </div>
+                          ))}
+                          
+                          {outlineQuizzes[m._id]?.filter(q => !q.sourceLectureId).map(q => (
+                            <button 
+                             key={q._id}
+                             onClick={() => navigate(`/quiz/${q._id}`)}
+                             className="w-full text-left py-2 px-3 rounded-lg text-[8px] font-black text-accent bg-accent/5 hover:bg-accent/10 transition-all flex items-center gap-2 border border-accent/5 mt-1"
+                            >
+                              <span>🧠</span>
+                              <span className="truncate">{q.title}</span>
+                            </button>
+                          ))}
+                       </div>
+                     )}
+                  </div>
+                );
+              })}
+           </div>
+           
+           <div className="p-4 bg-surface-soft/50 border-t border-border/50 text-center">
+              <button 
+               onClick={() => navigate(`/course/${courseOutline?._id || lecture?.courseId || lecture?.course}`)}
+               className="text-[9px] font-black text-secondary uppercase tracking-[0.2em] hover:text-accent transition-colors"
+              >
+                 ← View Full Course
+              </button>
+           </div>
+        </aside>
+
+        {/* Main Content Center */}
+        <main className="flex-1 overflow-y-auto no-scrollbar bg-background flex flex-col items-center relative z-10">
+           <div className="w-full max-w-5xl px-6 lg:px-12 py-10">
+              
+              <div className="mb-10 text-center">
+                 <span className="px-3 py-1 bg-accent/10 text-accent text-[9px] font-black rounded-full uppercase tracking-widest mb-4 inline-block shadow-sm">Lecture</span>
+                 <h1 className="text-2xl lg:text-4xl font-black text-primary leading-tight tracking-tight mb-2">{lecture.title}</h1>
+              </div>
+
+              <div className="space-y-12 mb-16">
+                 {mediaContent.map((item, index) => {
+                    const isVideo = item.type === "video";
+                    const isImage = item.type === "image";
+                    const isPDF = item.type === "pdf";
+                    const isPPT = item.type === "pptx" || item.type === "ppt";
+                    const isDOC = item.type === "docx" || item.type === "doc";
+                    
+                    if (isVideo && transcriptOnlyMode && lecture.transcript?.text) return null;
+
+                    const showImage = !isImage || user?.preferredMode !== "low-bandwidth" || visibleImages[index];
+
+                    return (
+                      <div key={index} className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                         {/* Media Player / Viewer */}
+                         <div className="relative group">
+                           {isVideo && <UnifiedPlayer item={item} />}
+                           
+                           {isImage && (
+                             showImage ? (
+                               <div className="rounded-[32px] overflow-hidden border border-border shadow-2xl max-w-4xl mx-auto bg-surface">
+                                 <img src={item.url} alt="Lecture Content" className="w-full h-auto" />
+                               </div>
+                             ) : (
+                               <button 
+                                 onClick={() => setVisibleImages(curr => ({ ...curr, [index]: true }))} 
+                                 className="w-full py-20 bg-surface border-2 border-dashed border-border rounded-[32px] text-secondary text-[10px] font-black uppercase tracking-widest hover:bg-surface-soft hover:border-accent/30 transition-all flex flex-col items-center gap-4"
+                               >
+                                 <span className="text-3xl">🖼️</span>
+                                 <span>Click to load image (Optimized for bandwidth)</span>
+                               </button>
+                             )
+                           )}
+
+                           {isPDF && (
+                             <div className="rounded-[32px] overflow-hidden border border-border shadow-2xl max-w-4xl mx-auto bg-white h-[600px]">
+                                <iframe 
+                                  src={`${item.url}#toolbar=0`} 
+                                  className="w-full h-full border-none"
+                                  title="PDF Viewer"
+                                />
+                             </div>
+                           )}
+
+                           
+                           {isDOC && (
+                             <div className="rounded-[32px] overflow-hidden border border-border shadow-2xl max-w-4xl mx-auto bg-white h-[600px] relative group">
+                                {isLocalUrl(item.url) ? (
+                                  <div className="absolute inset-0 bg-surface flex flex-col items-center justify-center p-12 text-center">
+                                    <div className="w-24 h-24 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-4xl mb-6 shadow-sm">📝</div>
+                                    <h3 className="text-xl font-black text-primary mb-3">Local Preview Unavailable</h3>
+                                    <p className="text-sm font-medium text-secondary max-w-md mb-8">
+                                      Google Docs Viewer cannot access files on your local machine. 
+                                      Once deployed, this preview will work automatically.
+                                    </p>
+                                    <div className="flex gap-4">
+                                      <a href={item.url} download className="px-8 py-4 bg-accent text-white text-[10px] font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-accent/20">Download to View</a>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <iframe 
+                                    src={`https://docs.google.com/viewer?url=${encodeURIComponent(item.url)}&embedded=true`} 
+                                    className="w-full h-full border-none"
+                                    title="Document Viewer"
+                                  />
+                                )}
+                             </div>
+                           )}
+                           {isPPT && (
+                             <div className="rounded-[32px] overflow-hidden border border-border shadow-2xl max-w-4xl mx-auto bg-white h-[600px] relative group">
+                                {isLocalUrl(item.url) ? (
+                                  <div className="absolute inset-0 bg-surface flex flex-col items-center justify-center p-12 text-center">
+                                    <div className="w-24 h-24 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center text-4xl mb-6 shadow-sm">📂</div>
+                                    <h3 className="text-xl font-black text-primary mb-3">Local Preview Unavailable</h3>
+                                    <p className="text-sm font-medium text-secondary max-w-md mb-8">
+                                      Google Docs Viewer cannot access files on your local machine (localhost). 
+                                      Once deployed to a public server, this preview will work automatically.
+                                    </p>
+                                    <div className="flex gap-4">
+                                      <a href={item.url} download className="px-8 py-4 bg-accent text-white text-[10px] font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-accent/20">Download to View</a>
+                                      <a href={item.url} target="_blank" rel="noreferrer" className="px-8 py-4 bg-surface-soft text-secondary text-[10px] font-black uppercase tracking-widest rounded-2xl">Open in Browser</a>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <iframe 
+                                    src={`https://docs.google.com/viewer?url=${encodeURIComponent(item.url)}&embedded=true`} 
+                                    className="w-full h-full border-none"
+                                    title="PPT Viewer"
+                                  />
+                                )}
+                             </div>
+                           )}
+                         </div>
+
+                         {/* Transcript / AI Summary Tab System */}
+                         <div className="max-w-4xl mx-auto w-full space-y-6">
+                            <div className="flex justify-center">
+                               <div className="inline-flex p-1 bg-surface-muted rounded-full border border-border shadow-inner">
+                                  <button 
+                                    onClick={() => {
+                                      if (mediaTab === 'summary') setShowTranscriptBelow(!showTranscriptBelow);
+                                      else { setMediaTab('summary'); setShowTranscriptBelow(true); }
+                                    }}
+                                    className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${showTranscriptBelow && mediaTab === 'summary' ? 'bg-accent text-white shadow-lg shadow-accent/20' : 'text-secondary hover:bg-surface'}`}
+                                  >
+                                    <span>✨ AI Summary</span>
+                                  </button>
+                                  {(isVideo || (resourceFiles && resourceFiles.length > 0)) && (
+                                     <button 
+                                       onClick={() => {
+                                         if (mediaTab === 'transcript') setShowTranscriptBelow(!showTranscriptBelow);
+                                         else { setMediaTab('transcript'); setShowTranscriptBelow(true); }
+                                       }}
+                                       className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${showTranscriptBelow && mediaTab === 'transcript' ? 'bg-accent text-white shadow-lg shadow-accent/20' : 'text-secondary hover:bg-surface'}`}
+                                     >
+                                       <span>📄 Transcript</span>
+                                     </button>
+                                  )}
+                               </div>
+                            </div>
+
+                            {showTranscriptBelow && (
+                              <div className="bg-surface border border-border rounded-[24px] p-6 lg:p-10 animate-in slide-in-from-top duration-500 shadow-xl relative overflow-hidden">
+                                 {mediaTab === 'summary' && <div className="absolute top-0 right-0 w-48 h-48 bg-accent/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-[80px]" />}
+                                 
+                                 <div className="flex items-center justify-between mb-8 pb-4 border-b border-border/50">
+                                    <span className="text-[10px] font-black text-secondary uppercase tracking-widest">
+                                      {mediaTab === 'transcript' ? 'Transcript' : 'AI Executive Insights'}
+                                    </span>
+                                    {mediaTab === 'summary' && lecture.aiSummary?.status === 'ready' && (
+                                      <span className="px-3 py-1 bg-accent/10 text-accent text-[9px] font-black rounded-full uppercase tracking-widest">Context Aware</span>
+                                    )}
+                                 </div>
+                                 
+                                 <div className="max-h-[400px] overflow-y-auto pr-6 no-scrollbar">
+                                    {mediaTab === 'transcript' ? (
+                                      <p className="text-base font-medium text-secondary leading-relaxed whitespace-pre-wrap">
+                                        {lecture.transcript?.text || (lecture.resources?.length > 0 ? lecture.resources[0].extractedText : "") || "No documentation or OCR text available for this specific media."}
+                                      </p>
+                                    ) : (
+                                      <div className="space-y-8">
+                                        <div className="space-y-4">
+                                           <p className="text-lg font-black text-primary leading-tight tracking-tight">Summary of Key Concepts</p>
+                                           <p className="text-base font-medium text-secondary leading-relaxed">
+                                             {lecture.aiSummary?.text || "Generating AI summary for this content..."}
+                                           </p>
+                                        </div>
+                                        {lecture.aiSummary?.keyPoints?.length > 0 && (
+                                          <div className="pt-6 border-t border-border/30">
+                                             <p className="text-[10px] font-black text-secondary uppercase tracking-widest mb-6">Critical Takeaways</p>
+                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                               {lecture.aiSummary.keyPoints.map((p, i) => (
+                                                 <div key={i} className="p-4 bg-surface-soft rounded-2xl border border-accent/5 flex items-start gap-3">
+                                                    <span className="text-accent font-black">#</span>
+                                                    <span className="text-[11px] font-bold text-secondary">{p}</span>
+                                                 </div>
+                                               ))}
+                                             </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
                                  </div>
                               </div>
-                           </div>
-                        </div>
-                      )}
-
-                      <div className="flex justify-center gap-4">
-                         <button onClick={handleRestartAdaptive} className="px-8 py-4 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-black rounded-2xl transition-all hover:bg-gray-200 dark:hover:bg-gray-700">
-                            Restart Practice
-                         </button>
-                         <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="px-8 py-4 bg-blue-600 text-white font-black rounded-2xl shadow-xl shadow-blue-600/20 transition-all transform hover:-translate-y-1">
-                            Back to Lecture
-                         </button>
-                      </div>
-                   </div>
-                 ) : adaptiveQuestion || adaptiveFeedback ? (
-                   <div className="max-w-2xl mx-auto">
-                      <div className="flex justify-between items-center mb-8">
-                         <div className="flex flex-col">
-                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Progress</span>
-                            <div className="flex items-center gap-3">
-                               <div className="w-32 h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                                  <div 
-                                    className="h-full bg-blue-600 transition-all duration-500" 
-                                    style={{ width: `${(adaptiveQuestion.questionNumber / adaptiveQuestion.totalQuestions) * 100}%` }}
-                                  />
-                               </div>
-                               <span className="text-[10px] font-black text-gray-500">{adaptiveQuestion.questionNumber} / {adaptiveQuestion.totalQuestions}</span>
-                            </div>
+                            )}
                          </div>
-                         <span className="px-3 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 text-[10px] font-black rounded-full uppercase tracking-widest">Difficulty: {adaptiveQuestion.difficulty}</span>
                       </div>
-                      
-                      <h4 className="text-xl font-bold text-gray-900 dark:text-white mb-8">
-                        {adaptiveQuestion?.question}
-                      </h4>
-                      
-                      <div className="grid grid-cols-1 gap-4 mb-8">
-                         {(adaptiveQuestion?.options || []).map((opt, i) => (
-                           <button 
-                            key={i} 
-                            onClick={() => !adaptiveFeedback && setSelectedAdaptiveAnswer(i)}
-                            disabled={!!adaptiveFeedback}
-                            className={`p-6 text-left rounded-3xl border-2 transition-all font-bold relative group ${
-                              adaptiveFeedback 
-                                ? (i === adaptiveFeedback.correctAnswer ? 'border-green-500 bg-green-50 dark:bg-green-900/10 text-green-700 dark:text-green-400' : (selectedAdaptiveAnswer === i ? 'border-red-500 bg-red-50 dark:bg-red-900/10 text-red-700 dark:text-red-400' : 'border-gray-100 dark:border-gray-800 opacity-50'))
-                                : (selectedAdaptiveAnswer === i ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-600' : 'border-gray-100 dark:border-gray-800 hover:border-blue-300 text-gray-700 dark:text-gray-300')
-                            }`}
-                           >
-                             <div className="flex items-center">
-                                <span className={`w-8 h-8 rounded-xl flex items-center justify-center mr-4 text-xs font-black transition-colors ${selectedAdaptiveAnswer === i ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}`}>
-                                   {String.fromCharCode(65 + i)}
-                                </span>
-                                <span className="flex-1">{opt}</span>
-                                {adaptiveFeedback && i === adaptiveFeedback.correctAnswer && <span className="text-green-600 ml-2">✓</span>}
-                                {adaptiveFeedback && i === selectedAdaptiveAnswer && i !== adaptiveFeedback.correctAnswer && <span className="text-red-600 ml-2">✕</span>}
-                             </div>
-                           </button>
-                         ))}
-                      </div>
+                    );
+                 })}
+              </div>
 
-                      {!adaptiveFeedback ? (
-                        <button 
-                          onClick={handleSubmitAdaptiveAnswer} 
-                          disabled={isSubmittingAdaptive || selectedAdaptiveAnswer === null}
-                          className="w-full py-5 bg-blue-600 text-white font-black rounded-2xl shadow-xl shadow-blue-600/20 disabled:bg-gray-200 disabled:shadow-none disabled:text-gray-400 transition-all transform hover:-translate-y-1 active:scale-95"
-                        >
-                          {isSubmittingAdaptive ? "Analyzing Answer..." : "Submit Answer"}
-                        </button>
-                      ) : (
-                        <div className="animate-in slide-in-from-bottom duration-300">
-                           <div className={`p-8 rounded-[32px] border mb-8 ${adaptiveFeedback.isCorrect ? 'bg-green-50 dark:bg-green-900/10 border-green-100 dark:border-green-900/20 text-green-700 dark:text-green-400' : 'bg-red-50 dark:bg-red-900/10 border-red-100 dark:border-red-900/20 text-red-700 dark:text-red-400'}`}>
-                              <p className="font-black uppercase text-xs tracking-widest mb-2 flex items-center gap-2">
-                                 {adaptiveFeedback.isCorrect ? "✨ Brilliantly Done!" : "💡 Learning Opportunity"}
-                              </p>
-                              <p className="text-lg font-bold mb-4">{adaptiveFeedback.explanation}</p>
-                              {adaptiveFeedback.remediationHint && (
-                                <p className="text-sm italic opacity-80 mt-4 pt-4 border-t border-black/5 dark:border-white/5">
-                                   <span className="font-bold">Pro Tip:</span> {adaptiveFeedback.remediationHint}
-                                </p>
-                              )}
+              {resourceFiles.length > 0 && (
+                <div className="space-y-4 mb-16 max-w-4xl mx-auto w-full">
+                   <h3 className="text-[10px] font-black text-secondary uppercase tracking-[0.2em] mb-4">Lecture Resources</h3>
+                   {resourceFiles.map((res, i) => (
+                     <div key={i} className="bg-surface border border-border rounded-[24px] p-5 flex items-center justify-between shadow-sm hover:border-accent/20 transition-all group">
+                        <div className="flex items-center gap-5">
+                           <div className="w-12 h-12 bg-accent/5 text-accent flex items-center justify-center rounded-2xl text-xl border border-accent/10 group-hover:bg-accent group-hover:text-white transition-all">📄</div>
+                           <div>
+                              <p className="text-sm font-black text-primary">{res.title}</p>
+                              <p className="text-[9px] font-black text-secondary uppercase tracking-widest mt-1">Resource Archive</p>
                            </div>
-                           
-                           <button 
-                             onClick={() => setAdaptiveFeedback(null)}
-                             className="w-full py-5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-black rounded-2xl shadow-xl transition-all"
-                           >
-                             Continue to Next Question
-                           </button>
                         </div>
-                      )}
+                        <div className="flex gap-2">
+                           <a href={res.url} target="_blank" rel="noreferrer" className="px-5 py-2.5 bg-surface-soft text-secondary text-[9px] font-black rounded-xl uppercase tracking-widest hover:bg-surface-muted transition-all">View</a>
+                           <a href={res.url} download className="px-5 py-2.5 bg-accent text-white text-[9px] font-black rounded-xl uppercase tracking-widest hover:bg-accent/90 transition-all shadow-lg shadow-accent/10">Download</a>
+                        </div>
+                     </div>
+                   ))}
+                </div>
+              )}
+
+              <div className="space-y-10 mb-16 max-w-4xl mx-auto w-full">
+                 {textContent.map((item, index) => (
+                   <div key={index} className="text-base text-secondary leading-relaxed whitespace-pre-wrap font-medium bg-surface/30 p-8 lg:p-10 rounded-[24px] border border-border/50 shadow-inner">
+                      {item.data}
                    </div>
-                 ) : null}
-              </section>
-            )}
+                 ))}
+              </div>
 
-            {/* Resources & Notes */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-16">
-               <section>
-                  <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-8">Resources</h3>
-                  <div className="space-y-4">
-                     {lecture.resources?.map((r, i) => <ResourcePreview key={i} resource={r} />)}
-                     {!lecture.resources?.length && <p className="text-gray-400 italic">No extra resources for this lecture.</p>}
-                  </div>
-               </section>
 
-               {isAuthenticated && user?.role === "student" && (
-                 <section className="bg-white dark:bg-gray-900 p-8 rounded-[40px] border border-gray-100 dark:border-gray-800">
-                    <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-8">Personal Notes</h3>
-                    <textarea 
-                      className="w-full h-48 p-6 rounded-3xl bg-gray-50 dark:bg-gray-800 border-none text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 mb-6"
-                      placeholder="Capture your thoughts here..."
-                      value={note}
-                      onChange={(e) => setNote(e.target.value)}
-                    />
-                    <div className="flex items-center justify-between">
-                       <button onClick={handleSaveNote} disabled={isSavingNote} className="px-6 py-3 bg-blue-600 text-white font-bold rounded-xl shadow-lg shadow-blue-600/20">
-                          {isSavingNote ? "Saving..." : "Save Note"}
-                       </button>
-                       {noteMessage && <span className="text-xs font-bold text-green-600">{noteMessage}</span>}
-                    </div>
-                 </section>
-               )}
-            </div>
 
-            {/* Final Actions */}
-            {isAuthenticated && user?.role === "student" && (
-              <div className="flex flex-col items-center gap-6 py-12 border-t border-gray-100 dark:border-gray-800">
+              {lecture.aiQuestionBank?.status === "ready" && lecture.aiQuestionBank.questions?.length > 0 && (
+                <section className="bg-surface border border-border rounded-[32px] p-8 lg:p-12 mt-16 shadow-sm relative overflow-hidden max-w-4xl mx-auto w-full">
+                   <div className="absolute top-0 left-0 w-80 h-80 bg-warning/5 rounded-full -translate-y-1/2 -translate-x-1/2 blur-[100px]" />
+                   
+                   <div className="mb-10 text-center relative z-10">
+                      <span className="px-4 py-1.5 bg-warning text-white text-[9px] font-black rounded-full uppercase tracking-widest mb-6 inline-block shadow-2xl shadow-warning/30">Mastery Assessment</span>
+                      <h2 className="text-2xl font-black text-primary tracking-tight">Challenge Your Understanding</h2>
+                      <p className="text-xs font-medium text-secondary mt-3">Interactive adaptive quiz based on lecture content.</p>
+                   </div>
+
+                   <div className="text-center relative z-10">
+                      <button onClick={handleStartAdaptivePractice} className="px-12 py-6 bg-accent text-white font-black rounded-[24px] shadow-2xl shadow-accent/20 transition-all transform hover:-translate-y-1 active:scale-95 uppercase tracking-[0.2em] text-xs">
+                        Launch Practice Session
+                      </button>
+                   </div>
+                </section>
+              )}
+
+              <div className="flex flex-col items-center gap-6 py-24 border-t border-border mt-20">
                  <button 
                   onClick={handleMarkComplete} 
                   disabled={isMarkingComplete}
-                  className={`px-12 py-5 rounded-2xl font-black transition-all shadow-xl ${completionMessage.includes('completed') ? 'bg-green-500 text-white shadow-green-500/20' : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white shadow-none'}`}
+                  className={`px-16 py-6 rounded-2xl font-black transition-all shadow-2xl text-[11px] uppercase tracking-[0.2em] transform active:scale-95 ${completionMessage.includes('completed') ? 'bg-success text-white shadow-success/20' : 'bg-accent text-white shadow-accent/20 hover:scale-[1.02]'}`}
                  >
-                   {isMarkingComplete ? "Saving..." : completionMessage.includes('completed') ? "Completed ✓" : "Mark as Complete"}
+                   {isMarkingComplete ? "Processing..." : completionMessage.includes('completed') ? "✓ Unit Completed" : "Mark as Completed"}
                  </button>
-                 {completionMessage && <p className="text-sm font-bold text-blue-600 uppercase tracking-widest">{completionMessage}</p>}
+                 {completionMessage && <p className="text-[10px] font-black text-accent uppercase tracking-widest animate-pulse">{completionMessage}</p>}
+                 {nextLecture && (
+                    <button onClick={() => navigate(`/lecture/${nextLecture._id}`, { state: { lectures: lectureList } })} className="mt-4 px-8 py-4 bg-surface-soft text-secondary font-black text-[10px] uppercase tracking-[0.2em] rounded-xl hover:bg-accent hover:text-white transition-all shadow-sm">
+                       Next Unit: {nextLecture.title} →
+                    </button>
+                 )}
               </div>
-            )}
 
-          </main>
+           </div>
+        </main>
 
-          {/* Sidebar Area (Navigation) */}
-          <aside className="w-full lg:w-80 order-2 lg:order-1 sticky top-24">
-             <div className="bg-white dark:bg-gray-900 rounded-[40px] border border-gray-100 dark:border-gray-800 overflow-hidden shadow-xl shadow-blue-600/5">
-                <div className="p-8 border-b border-gray-50 dark:border-gray-800">
-                   <span className="text-blue-600 font-bold text-[10px] uppercase tracking-widest">Current Course</span>
-                   <h2 className="text-xl font-black text-gray-900 dark:text-white mt-1">{courseOutline?.title}</h2>
-                </div>
-                
-                <div className="p-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
-                   {outlineModules.map((m) => {
-                     const isOpen = openOutlineModule === m._id;
-                     return (
-                       <div key={m._id} className="mb-2">
-                          <button 
-                            onClick={() => setOpenOutlineModule(isOpen ? "" : m._id)}
-                            className={`w-full flex items-center justify-between p-4 rounded-2xl text-left transition-all ${isOpen ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
-                          >
-                             <span className="text-xs font-bold truncate pr-4">{m.title}</span>
-                             <span className="text-[10px] font-black">{isOpen ? '−' : '+'}</span>
-                          </button>
-                          {isOpen && (
-                            <div className="mt-2 space-y-1 pl-2 border-l-2 border-blue-100 dark:border-blue-900/30 ml-4">
-                               {outlineLectures[m._id]?.map((l) => (
-                                 <div key={l._id} className="space-y-1">
-                                   <button 
-                                    onClick={() => navigate(`/lecture/${l._id}`, { state: { lectures: outlineLectures[m._id] } })}
-                                    className={`w-full text-left p-3 rounded-xl text-xs font-medium transition-colors ${l._id === lectureId ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'}`}
-                                   >
-                                     <span className="flex items-center gap-2">📽️ {l.title}</span>
-                                   </button>
-                                   
-                                   {/* Linked Quizzes */}
-                                   {outlineQuizzes[m._id]?.filter(q => q.sourceLectureId === l._id).map(q => (
-                                     <button 
-                                      key={q._id} 
-                                      onClick={() => navigate(`/quiz/${q._id}`)}
-                                      className="w-[calc(100%-1.5rem)] ml-6 text-left p-2 rounded-lg text-[10px] font-bold text-orange-600 bg-orange-50/50 dark:bg-orange-900/10 hover:bg-orange-100 transition-colors border border-orange-100/50 dark:border-orange-900/10"
-                                     >
-                                       <span className="flex items-center gap-2">📝 {q.title}</span>
-                                     </button>
-                                   ))}
-                                 </div>
-                               ))}
+        <aside className="w-20 border-l border-border bg-surface flex flex-col items-center py-10 gap-8 flex-shrink-0 relative z-40">
+           <div className="flex flex-col gap-6 items-center">
+              <button 
+                onClick={() => {setShowAssistant(!showAssistant); setShowNotes(false);}}
+                className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl transition-all shadow-sm ${showAssistant ? 'bg-accent text-white shadow-lg shadow-accent/30 scale-110' : 'bg-surface-soft text-secondary hover:bg-accent/10 hover:text-accent'}`}
+                title="AI Learning Assistant"
+              >
+                 ✨
+              </button>
+              <button 
+                onClick={() => {setShowNotes(!showNotes); setShowAssistant(false);}}
+                className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl transition-all shadow-sm ${showNotes ? 'bg-accent text-white shadow-lg shadow-accent/30 scale-110' : 'bg-surface-soft text-secondary hover:bg-accent/10 hover:text-accent'}`}
+                title="Personal Knowledge Base"
+              >
+                 📝
+              </button>
+           </div>
+        </aside>
 
-                               {/* Floating Quizzes (Not linked to any lecture) */}
-                               {outlineQuizzes[m._id]?.filter(q => !q.sourceLectureId).map((q) => (
-                                 <button 
-                                  key={q._id} 
-                                  onClick={() => navigate(`/quiz/${q._id}`)}
-                                  className="w-full text-left p-3 rounded-xl text-xs font-bold text-purple-600 bg-purple-50/50 dark:bg-purple-900/10 hover:bg-purple-100 transition-colors border border-purple-100/50 dark:border-purple-900/10 mt-2"
-                                 >
-                                   <span className="flex items-center gap-2">🧠 {q.title}</span>
-                                 </button>
-                               ))}
+        {(showAssistant || showNotes) && (
+           <aside className="w-96 border-l border-border bg-surface flex flex-col flex-shrink-0 relative z-50 animate-in slide-in-from-right duration-500 shadow-[-20px_0_40px_rgba(0,0,0,0.05)] dark:shadow-[-20px_0_40px_rgba(0,0,0,0.3)] no-scrollbar">
+              <div className="p-8 border-b border-border/50 flex justify-between items-center bg-surface-soft/30">
+                 <div className="flex flex-col">
+                    <span className="text-accent font-black text-[9px] uppercase tracking-[0.2em] mb-1">Knowledge Tools</span>
+                    <h3 className="text-xs font-black text-primary uppercase tracking-[0.2em]">
+                       {showAssistant ? "AI Learning Assistant" : "Lecture Study Notes"}
+                    </h3>
+                 </div>
+                 <button onClick={() => {setShowAssistant(false); setShowNotes(false);}} className="w-8 h-8 rounded-full flex items-center justify-center text-secondary hover:bg-error/10 hover:text-error transition-all">✕</button>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-8 no-scrollbar flex flex-col">
+                 {showNotes ? (
+                    <div className="flex flex-col h-full">
+                       <textarea 
+                         className="flex-1 w-full bg-surface-soft/50 rounded-[32px] p-8 text-sm font-medium text-primary border-none focus:ring-2 focus:ring-accent/20 resize-none mb-6 shadow-inner transition-all focus:bg-surface border border-transparent focus:border-accent/10"
+                         placeholder="Synthesize your understanding here..."
+                         value={note}
+                         onChange={(e) => setNote(e.target.value)}
+                       />
+                       <button 
+                         onClick={handleSaveNote} 
+                         disabled={isSavingNote}
+                         className="w-full py-5 bg-accent text-white text-[10px] font-black rounded-2xl uppercase tracking-[0.2em] shadow-2xl shadow-accent/20 hover:scale-[1.02] transition-all"
+                       >
+                          {isSavingNote ? "Archiving..." : "Save Insights"}
+                       </button>
+                       {noteMessage && (
+                          <div className="mt-6 p-4 bg-success/10 border border-success/10 rounded-2xl text-center">
+                             <p className="text-[10px] font-black text-success uppercase tracking-widest">{noteMessage}</p>
+                          </div>
+                       )}
+                    </div>
+                 ) : (
+                    <div className="flex-1 flex flex-col h-full animate-in fade-in duration-700">
+                       <div className="flex-1 overflow-y-auto pr-2 no-scrollbar mb-6 space-y-6" ref={chatScrollRef}>
+                          <div className="bg-accent/5 p-6 rounded-[32px] border border-accent/10 relative overflow-hidden">
+                             <div className="absolute top-0 right-0 w-24 h-24 bg-accent/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
+                             <p className="text-[11px] font-medium text-secondary leading-relaxed relative z-10">
+                                I am your context-aware neural assistant. How can I assist you with <strong>{lecture.title}</strong> today?
+                             </p>
+                          </div>
+
+                          {chatMessages.map((msg, i) => (
+                            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                               <div className={`max-w-[85%] p-5 rounded-[24px] text-[11px] leading-relaxed ${msg.role === 'user' ? 'bg-accent text-white font-bold shadow-lg shadow-accent/10 rounded-br-none' : 'bg-surface-soft text-secondary font-medium border border-border/50 rounded-bl-none'}`}>
+                                  {msg.content}
+                               </div>
+                            </div>
+                          ))}
+                          
+                          {isChatLoading && (
+                            <div className="flex justify-start">
+                               <div className="bg-surface-soft p-5 rounded-[24px] rounded-bl-none border border-border/50">
+                                  <div className="flex gap-1">
+                                     <div className="w-1.5 h-1.5 bg-accent rounded-full animate-bounce" />
+                                     <div className="w-1.5 h-1.5 bg-accent rounded-full animate-bounce [animation-delay:0.2s]" />
+                                     <div className="w-1.5 h-1.5 bg-accent rounded-full animate-bounce [animation-delay:0.4s]" />
+                                  </div>
+                               </div>
                             </div>
                           )}
                        </div>
-                     );
-                   })}
-                </div>
-             </div>
 
-             <button 
-              onClick={() => setIsAssistantOpen(!isAssistantOpen)}
-              className="w-full mt-6 py-4 bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-black rounded-2xl shadow-xl transition-all transform hover:-translate-y-1 flex items-center justify-center gap-3"
-             >
-                <span className="text-lg">✨</span> {isAssistantOpen ? "Close AI Chat" : "Ask AI Assistant"}
-             </button>
-          </aside>
-
-        </div>
-      </div>
-
-      {/* AI Assistant Sidebar (Overlay) */}
-      {isAssistantOpen && (
-        <div className="fixed inset-0 z-[60] flex justify-end">
-           <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={() => setIsAssistantOpen(false)} />
-           <aside className="relative w-full max-w-lg bg-white dark:bg-gray-900 h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
-              <div className="p-8 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
-                 <div>
-                    <h3 className="text-2xl font-black text-gray-900 dark:text-white">EduReach AI</h3>
-                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mt-1">Gemma 2 Powered Assistant</p>
-                 </div>
-                 <button onClick={() => setIsAssistantOpen(false)} className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">✕</button>
+                       {chatMessages.length === 0 && (
+                         <div className="space-y-3">
+                            <p className="text-[9px] font-black text-secondary uppercase tracking-[0.2em] mb-2 pl-2">Analytical Queries</p>
+                            <div className="grid gap-2">
+                               <button onClick={() => handleSendChatQuery("Can you provide a comprehensive summary of this lecture's core themes?")} className="w-full text-left px-4 py-3 text-[10px] font-bold text-accent bg-accent/5 rounded-xl hover:bg-accent hover:text-white transition-all border border-accent/10 shadow-sm">
+                                  📝 Summarize Lecture
+                               </button>
+                               <button onClick={() => handleSendChatQuery("Can you identify and explain the most complex technical topics discussed in this unit?")} className="w-full text-left px-4 py-3 text-[10px] font-bold text-accent bg-accent/5 rounded-xl hover:bg-accent hover:text-white transition-all border border-accent/10 shadow-sm">
+                                  🧠 Explain Complex Topics
+                               </button>
+                            </div>
+                         </div>
+                       )}
+ 
+                       <div className="pt-6 border-t border-border/50 mt-6">
+                          <div className="relative">
+                             <input 
+                              type="text" 
+                              className="w-full pl-6 pr-12 py-4 bg-surface-soft rounded-2xl text-xs font-medium border-none focus:ring-2 focus:ring-accent/20 transition-all focus:bg-surface border border-transparent focus:border-accent/10" 
+                              placeholder="Type your query..." 
+                              value={chatQuery}
+                              onChange={(e) => setChatQuery(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && handleSendChatQuery()}
+                             />
+                             <button 
+                              onClick={() => handleSendChatQuery()}
+                              className="absolute right-4 top-1/2 -translate-y-1/2 text-accent font-black hover:scale-125 transition-transform"
+                             >
+                                ↵
+                             </button>
+                          </div>
+                       </div>
+                    </div>
+                 )}
               </div>
-
-              <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
-                 {assistantMessages.map((msg, i) => (
-                   <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[85%] p-6 rounded-3xl ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tl-none'}`}>
-                         <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
-                         {msg.mcqs?.length > 0 && (
-                           <div className="mt-6 space-y-4 pt-6 border-t border-black/10 dark:border-white/10">
-                              {msg.mcqs.map((mcq, mi) => (
-                                <div key={mi} className="bg-white/10 p-4 rounded-2xl">
-                                   <p className="font-bold text-sm mb-3">{mcq.question}</p>
-                                   <div className="space-y-1">
-                                      {mcq.options.map((o, oi) => <p key={oi} className="text-xs opacity-80">{String.fromCharCode(65+oi)}. {o}</p>)}
-                                   </div>
-                                   <p className="mt-3 text-[10px] font-black uppercase text-blue-300">Answer: {String.fromCharCode(65 + (mcq.correctAnswer || 0))}</p>
-                                </div>
-                              ))}
-                           </div>
-                         )}
-                      </div>
-                   </div>
-                 ))}
-                 {isSendingAssistant && <div className="flex justify-start"><div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-3xl rounded-tl-none animate-pulse text-xs font-bold text-gray-400">Gemma is thinking...</div></div>}
-              </div>
-
-              <form onSubmit={handleAssistantSubmit} className="p-8 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
-                 <div className="relative">
-                    <textarea 
-                      className="w-full p-6 pr-16 rounded-3xl bg-white dark:bg-gray-900 border-none text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 shadow-xl resize-none"
-                      placeholder="Type your doubt..."
-                      rows={2}
-                      value={assistantInput}
-                      onChange={(e) => setAssistantInput(e.target.value)}
-                    />
-                    <button type="submit" disabled={isSendingAssistant} className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-blue-600 text-white rounded-2xl flex items-center justify-center hover:scale-105 transition-all">
-                       →
-                    </button>
-                 </div>
-              </form>
            </aside>
-        </div>
-      )}
+        )}
+ 
+      </div>
     </AppShell>
   );
 };
-
+ 
 export default LectureViewer;

@@ -11,6 +11,8 @@ services:
       # These will be pulled from the .env file on the server
     env_file:
       - .env
+    volumes:
+      - ./server/uploads:/app/uploads
     restart: always
 
   frontend:

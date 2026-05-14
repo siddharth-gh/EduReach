@@ -45,18 +45,18 @@ const TeacherProfile = () => {
     <SidebarLayout>
       <div className="p-8 max-w-4xl mx-auto space-y-12">
         <header>
-           <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Profile Settings</h2>
-           <p className="text-gray-500 dark:text-gray-400 mt-2">Manage your public instructor identity.</p>
+           <h2 className="text-3xl font-bold text-primary">Profile Settings</h2>
+           <p className="text-secondary mt-2">Manage your public instructor identity.</p>
         </header>
 
-        <div className="bg-white dark:bg-[#1e1e1e] p-10 rounded-[3rem] border border-gray-100 dark:border-gray-800 shadow-sm">
+        <div className="bg-white dark:bg-[#1e1e1e] p-10 rounded-[3rem] border border-border shadow-sm">
            
            <div className="flex items-center gap-8 pb-10 border-b border-gray-50 dark:border-gray-800 mb-10">
               <div className="w-24 h-24 bg-blue-600 rounded-[2rem] flex items-center justify-center text-3xl text-white font-bold shadow-xl shadow-blue-600/20">
                  {user?.name?.charAt(0) || "T"}
               </div>
               <div>
-                 <h3 className="text-2xl font-bold text-gray-900 dark:text-white">{user?.name}</h3>
+                 <h3 className="text-2xl font-bold text-primary">{user?.name}</h3>
                  <p className="text-gray-400 font-medium uppercase text-xs tracking-widest mt-1">{user?.role} Portal • {user?.email}</p>
               </div>
            </div>
@@ -69,7 +69,7 @@ const TeacherProfile = () => {
                  <div className="space-y-2">
                     <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Display Name</label>
                     <input 
-                      className="w-full px-6 py-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 transition-all"
+                      className="w-full px-6 py-4 rounded-2xl bg-surface border-none text-primary focus:ring-2 focus:ring-blue-500 transition-all"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="Your professional name"
@@ -78,7 +78,7 @@ const TeacherProfile = () => {
                  <div className="space-y-2">
                     <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Email Address</label>
                     <input 
-                      className="w-full px-6 py-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50 border-none text-gray-400 cursor-not-allowed"
+                      className="w-full px-6 py-4 rounded-2xl bg-surface/50 border-none text-gray-400 cursor-not-allowed"
                       value={user?.email}
                       disabled
                     />
@@ -89,7 +89,7 @@ const TeacherProfile = () => {
               <div className="space-y-2">
                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Instructor Bio</label>
                  <textarea 
-                   className="w-full px-6 py-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 transition-all resize-none"
+                   className="w-full px-6 py-4 rounded-2xl bg-surface border-none text-primary focus:ring-2 focus:ring-blue-500 transition-all resize-none"
                    rows={5}
                    value={bio}
                    onChange={(e) => setBio(e.target.value)}
@@ -111,15 +111,15 @@ const TeacherProfile = () => {
 
         {/* Account Status / Security Summary */}
         <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-           <div className="p-8 bg-white dark:bg-[#1e1e1e] rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm">
+           <div className="p-8 bg-white dark:bg-[#1e1e1e] rounded-[2.5rem] border border-border shadow-sm">
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Account Type</p>
-              <p className="text-xl font-bold text-gray-900 dark:text-white">Verified Instructor</p>
+              <p className="text-xl font-bold text-primary">Verified Instructor</p>
            </div>
-           <div className="p-8 bg-white dark:bg-[#1e1e1e] rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm">
+           <div className="p-8 bg-white dark:bg-[#1e1e1e] rounded-[2.5rem] border border-border shadow-sm">
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Member Since</p>
-              <p className="text-xl font-bold text-gray-900 dark:text-white">{new Date(user?.createdAt).toLocaleDateString()}</p>
+              <p className="text-xl font-bold text-primary">{new Date(user?.createdAt).toLocaleDateString()}</p>
            </div>
-           <div className="p-8 bg-white dark:bg-[#1e1e1e] rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm">
+           <div className="p-8 bg-white dark:bg-[#1e1e1e] rounded-[2.5rem] border border-border shadow-sm">
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Security</p>
               <p className="text-xl font-bold text-blue-600">Password Active</p>
            </div>

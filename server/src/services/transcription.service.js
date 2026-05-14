@@ -8,27 +8,21 @@ const ENABLE_WHISPER_TRANSCRIPTION =
     process.env.ENABLE_WHISPER_TRANSCRIPTION === "true";
 const WHISPER_API_URL = process.env.WHISPER_API_URL || "https://api.openai.com/v1";
 const WHISPER_API_KEY = process.env.WHISPER_API_KEY || process.env.OPENAI_API_KEY;
-const MOCK_AI_TRANSCRIPT = `Automatic video transcription is not available yet in testing mode.
-
-This sample transcript is provided so the lecture summary, MCQ generation, and text-only reading mode can be tested without using a paid transcription API.
-
-In this lecture, the teacher introduces artificial intelligence as the ability of computer systems to perform tasks that usually require human intelligence. The lesson explains how AI can recognize patterns, make predictions, answer questions, and support learning platforms with features such as personalized recommendations, automated summaries, and practice questions.
-
-The lecture also discusses responsible use of AI. Students should understand that AI tools are helpful assistants, but their output should be checked for accuracy, fairness, and relevance to the learning material.`;
+const MOCK_AI_TRANSCRIPT = `Artificial Intelligence (AI), while a powerful tool, comes with several significant disadvantages that must be considered. One major concern is the potential for bias and discrimination; AI systems are only as objective as the data they are trained on, meaning they can inadvertently perpetuate and even amplify existing societal prejudices. Additionally, there is the risk of over-reliance on AI, which may lead to a degradation of human skills and critical thinking as tasks are increasingly automated. The "black box" nature of some AI models also poses a challenge, as it can be difficult to understand how these systems arrive at their decisions, raising issues of accountability and transparency. Furthermore, the widespread deployment of AI could exacerbate economic inequality through job displacement, and the massive computational power required to train large models has a considerable environmental footprint.`;
 
 const getOpenAiClient = () => {
-    if (!WHISPER_API_KEY && !WHISPER_API_URL.includes("localhost") && !WHISPER_API_URL.includes("127.0.0.1")) {
-        throw new Error("WHISPER_API_KEY or OPENAI_API_KEY is not configured");
+    if (!WHISPER_API_KEY) {
+        throw new Error("WHISPER_API_KEY is not configured");
     }
 
     return new OpenAI({
-        apiKey: WHISPER_API_KEY || "local-no-key-needed",
+        apiKey: WHISPER_API_KEY,
         baseURL: WHISPER_API_URL,
     });
 };
 
 export const isTranscriptionConfigured = () =>
-    ENABLE_WHISPER_TRANSCRIPTION && (Boolean(WHISPER_API_KEY) || WHISPER_API_URL.includes("localhost") || WHISPER_API_URL.includes("127.0.0.1"));
+    ENABLE_WHISPER_TRANSCRIPTION && Boolean(WHISPER_API_KEY);
 
 export const getMockTranscription = () => ({
     text: MOCK_AI_TRANSCRIPT,

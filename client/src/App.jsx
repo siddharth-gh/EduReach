@@ -39,6 +39,7 @@ function App() {
         </Route>
         <Route element={<ProtectedRoute />}>
           <Route path="/quiz/:quizId" element={<QuizAttempt />} />
+          <Route path="/adaptive-quiz/:lectureId" element={<QuizAttempt />} />
           <Route path="/quiz-result/:attemptId" element={<QuizResult />} />
           <Route path="/certificate/:courseId" element={<CertificatePage />} />
         </Route>

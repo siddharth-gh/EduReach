@@ -6,7 +6,7 @@ import {
     updateQuiz,
     deleteQuiz,
 } from "../controllers/quiz.controller.js";
-import protect from "../middleware/auth.middleware.js";
+import protect, { optionalProtect } from "../middleware/auth.middleware.js";
 import authorizeRoles from "../middleware/role.middleware.js";
 import {
     validate,
@@ -19,8 +19,8 @@ import {
 
 const router = express.Router();
 
-router.get("/module/:moduleId", validateObjectIdParams("moduleId"), getQuizzesByModule);
-router.get("/:id", protect, validateObjectIdParams("id"), getQuizById);
+router.get("/module/:moduleId", optionalProtect, validateObjectIdParams("moduleId"), getQuizzesByModule);
+router.get("/:id", optionalProtect, validateObjectIdParams("id"), getQuizById);
 router.post(
     "/",
     protect,

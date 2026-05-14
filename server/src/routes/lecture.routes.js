@@ -7,8 +7,9 @@ import {
     refreshLectureAi,
     updateLecture,
     deleteLecture,
+    togglePublishLecture,
 } from "../controllers/lecture.controller.js";
-import protect from "../middleware/auth.middleware.js";
+import protect, { optionalProtect } from "../middleware/auth.middleware.js";
 import authorizeRoles from "../middleware/role.middleware.js";
 import {
     validate,
@@ -33,8 +34,8 @@ router.post(
 );
 
 // read (public)
-router.get("/:moduleId", validateObjectIdParams("moduleId"), getLecturesByModule);
-router.get("/single/:id", validateObjectIdParams("id"), getLectureById);
+router.get("/:moduleId", optionalProtect, validateObjectIdParams("moduleId"), getLecturesByModule);
+router.get("/single/:id", optionalProtect, validateObjectIdParams("id"), getLectureById);
 router.post(
     "/single/:id/ai-chat",
     protect,
@@ -67,6 +68,15 @@ router.delete(
     authorizeRoles("teacher", "admin"),
     validateObjectIdParams("id"),
     deleteLecture
+);
+
+// publish (teacher/admin)
+router.patch(
+    "/:id/publish",
+    protect,
+    authorizeRoles("teacher", "admin"),
+    validateObjectIdParams("id"),
+    togglePublishLecture
 );
 
 export default router;

@@ -18,6 +18,19 @@ const Signup = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    
+    // Validation
+    if (name.trim().length < 2) {
+      return setError("Name must be at least 2 characters long.");
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return setError("Please enter a valid email address.");
+    }
+    if (password.length < 6) {
+      return setError("Password must be at least 6 characters long.");
+    }
+
     setLoading(true);
     try {
       await signup(name, email, password, role);
@@ -34,14 +47,14 @@ const Signup = () => {
       <div className="min-h-[80vh] flex items-center justify-center px-4 py-10">
         <div className="w-full max-w-md">
            <div className="text-center mb-6">
-              <Link to="/" className="text-3xl font-black text-gray-900 dark:text-white mb-2 inline-block">
-                <span className="text-blue-600">Edu</span>Reach
+              <Link to="/" className="text-3xl font-black text-primary mb-2 inline-block">
+                <span className="text-blue-600">Remote</span>Smart
               </Link>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Join EduReach</h1>
-              <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">Create your account to start learning</p>
+              <h1 className="text-2xl font-bold text-primary">Join RemoteSmart</h1>
+              <p className="text-secondary mt-1 text-sm">Create your account to start learning</p>
            </div>
 
-           <div className="bg-white dark:bg-gray-900 p-8 lg:p-10 rounded-[40px] border border-gray-100 dark:border-gray-800 shadow-2xl shadow-blue-600/5">
+           <div className="bg-surface p-8 lg:p-10 rounded-[40px] border border-border shadow-2xl shadow-blue-600/5">
               <form onSubmit={handleSubmit} className="space-y-5">
                  {error && (
                    <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/50 rounded-2xl text-red-600 text-xs font-bold text-center">
@@ -55,7 +68,7 @@ const Signup = () => {
                       type="text" 
                       required
                       placeholder="John Doe"
-                      className="w-full px-5 py-3 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 transition-all text-sm"
+                      className="w-full px-5 py-3 rounded-2xl bg-surface border-none text-primary placeholder-gray-400 focus:ring-2 focus:ring-blue-500 transition-all text-sm"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                     />
@@ -67,7 +80,7 @@ const Signup = () => {
                       type="email" 
                       required
                       placeholder="john@example.com"
-                      className="w-full px-5 py-3 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 transition-all text-sm"
+                      className="w-full px-5 py-3 rounded-2xl bg-surface border-none text-primary placeholder-gray-400 focus:ring-2 focus:ring-blue-500 transition-all text-sm"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                     />
@@ -79,7 +92,7 @@ const Signup = () => {
                       type="password" 
                       required
                       placeholder="••••••••"
-                      className="w-full px-5 py-3 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 transition-all text-sm"
+                      className="w-full px-5 py-3 rounded-2xl bg-surface border-none text-primary placeholder-gray-400 focus:ring-2 focus:ring-blue-500 transition-all text-sm"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                     />
@@ -87,7 +100,7 @@ const Signup = () => {
 
                  <div>
                     <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Account Type</label>
-                    <div className="grid grid-cols-2 gap-3 p-1 bg-gray-50 dark:bg-gray-800 rounded-2xl">
+                    <div className="grid grid-cols-2 gap-3 p-1 bg-surface rounded-2xl">
                        <button 
                         type="button" 
                         onClick={() => setRole('student')}
@@ -115,7 +128,7 @@ const Signup = () => {
               </form>
 
               <div className="mt-6 text-center border-t border-gray-50 dark:border-gray-800 pt-6">
-                 <p className="text-xs text-gray-500 dark:text-gray-400">
+                 <p className="text-xs text-secondary">
                     Already have an account? <Link to="/login" className="text-blue-600 font-bold hover:underline">Sign in</Link>
                  </p>
               </div>

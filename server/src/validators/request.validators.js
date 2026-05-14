@@ -106,7 +106,7 @@ const validateResourceList = (resources, errors) => {
         return undefined;
     }
 
-    return resources.map((resource, index) => {
+    const result = resources.map((resource, index) => {
         if (!isObject(resource)) {
             errors.push(`resources[${index}] must be an object`);
             return null;
@@ -163,9 +163,11 @@ const validateResourceList = (resources, errors) => {
                 errors
             ) ?? false;
 
-        if (!["pdf", "text", "file"].includes(type)) {
-            errors.push(`resources[${index}].type must be pdf, text, or file`);
+        if (!["pdf", "ppt", "pptx", "docx", "doc", "text", "file"].includes(type)) {
+            errors.push(`resources[${index}].type must be pdf, ppt, pptx, docx, doc, text, or file`);
         }
+
+        if (!title || !url) return null;
 
         return title && url
             ? {
@@ -180,6 +182,7 @@ const validateResourceList = (resources, errors) => {
               }
             : null;
     });
+    return result.filter(Boolean);
 };
 
 const validateLectureContents = (contents, errors) => {
@@ -671,6 +674,8 @@ export const validateLectureCreate = (req) => {
             error: "",
         };
 
+    const videoJobId = validateOptionalString(body.videoJobId, "videoJobId", errors, { allowEmpty: true }) ?? "";
+
     if (body.order === undefined) {
         errors.push("order is required");
     }
@@ -685,6 +690,7 @@ export const validateLectureCreate = (req) => {
                 contents,
                 resources,
                 transcript,
+                videoJobId,
             },
         },
     };
@@ -702,13 +708,16 @@ export const validateLectureUpdate = (req) => {
     const resources = validateResourceList(body.resources, errors);
     const transcript = validateLectureTranscript(body.transcript, errors);
 
+    const videoJobId = validateOptionalString(body.videoJobId, "videoJobId", errors, { allowEmpty: true });
+
     pushError(
         errors,
         title === undefined &&
             order === undefined &&
             contents === undefined &&
             resources === undefined &&
-            transcript === undefined,
+            transcript === undefined &&
+            videoJobId === undefined,
         "At least one lecture field must be provided"
     );
 
@@ -721,6 +730,7 @@ export const validateLectureUpdate = (req) => {
                 ...(contents !== undefined ? { contents } : {}),
                 ...(resources !== undefined ? { resources } : {}),
                 ...(transcript !== undefined ? { transcript } : {}),
+                ...(videoJobId !== undefined ? { videoJobId } : {}),
             },
         },
     };

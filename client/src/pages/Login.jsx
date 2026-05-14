@@ -16,6 +16,16 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+
+    // Validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return setError("Please enter a valid email address.");
+    }
+    if (!password) {
+      return setError("Password is required.");
+    }
+
     setLoading(true);
     try {
       await login(email, password);
@@ -32,14 +42,14 @@ const Login = () => {
       <div className="min-h-[70vh] flex items-center justify-center px-4 py-4">
         <div className="w-full max-w-md">
            <div className="text-center mb-4">
-              <Link to="/" className="text-2xl font-black text-gray-900 dark:text-white mb-1 inline-block">
+              <Link to="/" className="text-2xl font-black text-primary mb-1 inline-block">
                 <span className="text-blue-600">Edu</span>Reach
               </Link>
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white">Welcome Back</h1>
-              <p className="text-gray-500 dark:text-gray-400 mt-1 text-xs">Please sign in to your account</p>
+              <h1 className="text-xl font-bold text-primary">Welcome Back</h1>
+              <p className="text-secondary mt-1 text-xs">Please sign in to your account</p>
            </div>
 
-           <div className="bg-white dark:bg-gray-900 p-8 lg:p-10 rounded-[40px] border border-gray-100 dark:border-gray-800 shadow-2xl shadow-blue-600/5">
+           <div className="bg-surface p-8 lg:p-10 rounded-[40px] border border-border shadow-2xl shadow-blue-600/5">
               <form onSubmit={handleSubmit} className="space-y-6">
                  {error && (
                    <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/50 rounded-2xl text-red-600 text-xs font-bold text-center">
@@ -53,7 +63,7 @@ const Login = () => {
                       type="email" 
                       required
                       placeholder="teacher@edureach.edu"
-                      className="w-full px-5 py-3 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 transition-all text-sm"
+                      className="w-full px-5 py-3 rounded-2xl bg-surface border-none text-primary placeholder-gray-400 focus:ring-2 focus:ring-blue-500 transition-all text-sm"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                     />
@@ -65,7 +75,7 @@ const Login = () => {
                       type="password" 
                       required
                       placeholder="••••••••"
-                      className="w-full px-5 py-3 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 transition-all text-sm"
+                      className="w-full px-5 py-3 rounded-2xl bg-surface border-none text-primary placeholder-gray-400 focus:ring-2 focus:ring-blue-500 transition-all text-sm"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                     />
@@ -81,7 +91,7 @@ const Login = () => {
               </form>
 
               <div className="mt-6 text-center border-t border-gray-50 dark:border-gray-800 pt-6">
-                 <p className="text-xs text-gray-500 dark:text-gray-400">
+                 <p className="text-xs text-secondary">
                     Don't have an account? <Link to="/signup" className="text-blue-600 font-bold hover:underline">Create one</Link>
                  </p>
               </div>

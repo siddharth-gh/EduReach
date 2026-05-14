@@ -57,9 +57,36 @@ const ParticipantView = ({ participantId }) => {
   );
 };
 
-const ChatView = () => {
+const ParticipantItem = ({ participantId, isTeacherHost }) => {
+  const { displayName, isLocal, remove } = useParticipant(participantId);
+  return (
+    <div className="flex items-center justify-between p-3 bg-surface/40 rounded-xl border border-gray-100/50 dark:border-gray-700/30">
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 text-xs font-bold">
+          {displayName?.charAt(0).toUpperCase()}
+        </div>
+        <span className="text-sm font-medium text-secondary">
+          {displayName} {isLocal && "(You)"}
+        </span>
+      </div>
+      {isTeacherHost && !isLocal && (
+        <button 
+          onClick={() => remove()}
+          className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-50 hover:bg-red-100 text-red-500 transition-colors"
+          title="Remove from class"
+        >
+          ✕
+        </button>
+      )}
+    </div>
+  );
+};
+
+const LiveSidebar = ({ isTeacherHost }) => {
+  const [activeTab, setActiveTab] = useState("chat");
   const [message, setMessage] = useState("");
   const { publish, messages } = usePubSub("CHAT", {});
+  const { participants } = useMeeting();
 
   const handleSendMessage = () => {
     if (message.trim()) {
@@ -68,39 +95,72 @@ const ChatView = () => {
     }
   };
 
+  const participantsArr = [...participants.values()];
+
   return (
-    <div className="w-full md:w-[350px] h-[400px] md:h-full bg-white dark:bg-[#0f172a] rounded-[32px] md:rounded-none border border-gray-100 dark:border-gray-800 shadow-xl md:shadow-none flex flex-col overflow-hidden transition-all">
-      <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-        <span className="text-sm font-black uppercase tracking-widest text-gray-900 dark:text-white">Live Chat</span>
-        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-      </div>
-      <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
-        {messages.map((msg) => (
-          <div key={msg.id} className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-2xl border border-gray-100/50 dark:border-gray-700/30">
-            <span className="font-black text-[10px] text-blue-600 dark:text-blue-400 uppercase tracking-widest block mb-1">{msg.senderName}</span>
-            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{msg.message}</p>
-          </div>
-        ))}
-        {messages.length === 0 && (
-          <div className="h-full flex flex-col items-center justify-center opacity-30 text-center px-6">
-            <span className="text-3xl mb-2">💬</span>
-            <p className="text-xs font-bold uppercase tracking-widest">No messages yet. Say hello!</p>
-          </div>
-        )}
-      </div>
-      <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/20 flex gap-2">
-        <input
-          type="text"
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-          placeholder="Type a message..."
-          className="flex-1 px-4 py-3 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-        />
-        <button className="w-12 h-12 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-600/20 active:scale-95 transition-all" onClick={handleSendMessage}>
-          →
+    <div className="w-full md:w-[350px] h-[500px] md:h-full bg-white dark:bg-[#0f172a] rounded-[32px] md:rounded-none border border-border shadow-xl md:shadow-none flex flex-col overflow-hidden transition-all">
+      {/* Tab Header */}
+      <div className="flex border-b border-border">
+        <button 
+          onClick={() => setActiveTab("chat")}
+          className={`flex-1 py-4 text-[11px] font-black uppercase tracking-widest transition-all ${activeTab === "chat" ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"}`}
+        >
+          Chat ({messages.length})
+        </button>
+        <button 
+          onClick={() => setActiveTab("members")}
+          className={`flex-1 py-4 text-[11px] font-black uppercase tracking-widest transition-all ${activeTab === "members" ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"}`}
+        >
+          Members ({participantsArr.length})
         </button>
       </div>
+
+      {activeTab === "chat" ? (
+        <>
+          <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+            {messages.map((msg) => (
+              <div key={msg.id} className="bg-surface/50 p-4 rounded-2xl border border-gray-100/50 dark:border-gray-700/30">
+                <span className="font-black text-[10px] text-blue-600 dark:text-blue-400 uppercase tracking-widest block mb-1">{msg.senderName}</span>
+                <p className="text-sm text-secondary leading-relaxed">{msg.message}</p>
+              </div>
+            ))}
+            {messages.length === 0 && (
+              <div className="h-full flex flex-col items-center justify-center opacity-30 text-center px-6">
+                <span className="text-3xl mb-2">💬</span>
+                <p className="text-xs font-bold uppercase tracking-widest">No messages yet. Say hello!</p>
+              </div>
+            )}
+          </div>
+          <div className="p-4 border-t border-border bg-gray-50/50 bg-surface-soft/20 flex gap-2">
+            <input
+              type="text"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+              placeholder="Type a message..."
+              className="flex-1 px-4 py-3 rounded-xl bg-surface border border-border text-sm text-primary outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+            />
+            <button className="w-12 h-12 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-600/20 active:scale-95 transition-all" onClick={handleSendMessage}>
+              →
+            </button>
+          </div>
+        </>
+      ) : (
+        <div className="flex-1 overflow-y-auto p-6 space-y-3 custom-scrollbar">
+          <div className="flex items-center justify-between mb-4">
+             <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Current Participants</span>
+             <span className="px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-[10px] font-black rounded-lg">LIVE</span>
+          </div>
+          {participantsArr.map((p) => (
+            <ParticipantItem key={p.id} participantId={p.id} isTeacherHost={isTeacherHost} />
+          ))}
+          {participantsArr.length === 0 && (
+            <div className="h-40 flex items-center justify-center opacity-20">
+              <p className="text-xs font-bold uppercase tracking-widest">No members found</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -110,7 +170,9 @@ const MeetingView = ({ onMeetingLeave, isTeacherHost }) => {
   const [micOn, setMicOn] = useState(true);
   const [webcamOn, setWebcamOn] = useState(true);
 
-  const { join, leave, end, toggleMic, toggleWebcam, participants } = useMeeting({
+  const [screenShareOn, setScreenShareOn] = useState(false);
+
+  const { join, leave, end, toggleMic, toggleWebcam, toggleScreenShare, participants } = useMeeting({
     onMeetingJoined: () => setJoined("JOINED"),
     onMeetingLeft: () => onMeetingLeave(),
   });
@@ -123,6 +185,11 @@ const MeetingView = ({ onMeetingLeave, isTeacherHost }) => {
   const handleToggleWebcam = () => {
     toggleWebcam();
     setWebcamOn(!webcamOn);
+  };
+
+  const handleToggleScreenShare = () => {
+    toggleScreenShare();
+    setScreenShareOn(!screenShareOn);
   };
 
   const participantsArr = [...participants.values()];
@@ -148,7 +215,7 @@ const MeetingView = ({ onMeetingLeave, isTeacherHost }) => {
             {/* Video Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 p-6 h-full pb-32 overflow-y-auto custom-scrollbar">
               {participantsArr.map((participant) => (
-                <div key={participant.id} className="aspect-video rounded-3xl overflow-hidden shadow-2xl border border-gray-100 dark:border-gray-800 bg-black">
+                <div key={participant.id} className="aspect-video rounded-3xl overflow-hidden shadow-2xl border border-border bg-black">
                   <ParticipantView participantId={participant.id} />
                 </div>
               ))}
@@ -156,27 +223,41 @@ const MeetingView = ({ onMeetingLeave, isTeacherHost }) => {
 
             {/* Floating Glassmorphism Toolbar */}
             <div className="absolute bottom-6 md:bottom-8 left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur-xl border border-white/10 rounded-full p-2 md:p-3 flex items-center gap-2 md:gap-4 shadow-2xl z-10">
-              <button onClick={handleToggleMic} style={{
-                width: "48px", height: "48px", borderRadius: "50%", border: "none",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "pointer", transition: "all 0.2s ease",
-                background: micOn ? "rgba(255,255,255,0.15)" : "#ef4444",
-                color: "white", fontSize: "20px"
-              }} title="Toggle Microphone">
-                {micOn ? "🎙️" : "🔇"}
-              </button>
+              {isTeacherHost && (
+                <>
+                  <button onClick={handleToggleMic} style={{
+                    width: "48px", height: "48px", borderRadius: "50%", border: "none",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    cursor: "pointer", transition: "all 0.2s ease",
+                    background: micOn ? "rgba(255,255,255,0.15)" : "#ef4444",
+                    color: "white", fontSize: "20px"
+                  }} title="Toggle Microphone">
+                    {micOn ? "🎙️" : "🔇"}
+                  </button>
 
-              <button onClick={handleToggleWebcam} style={{
-                width: "48px", height: "48px", borderRadius: "50%", border: "none",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "pointer", transition: "all 0.2s ease",
-                background: webcamOn ? "rgba(255,255,255,0.15)" : "#ef4444",
-                color: "white", fontSize: "20px"
-              }} title="Toggle Camera">
-                {webcamOn ? "📷" : "🚫"}
-              </button>
+                  <button onClick={handleToggleWebcam} style={{
+                    width: "48px", height: "48px", borderRadius: "50%", border: "none",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    cursor: "pointer", transition: "all 0.2s ease",
+                    background: webcamOn ? "rgba(255,255,255,0.15)" : "#ef4444",
+                    color: "white", fontSize: "20px"
+                  }} title="Toggle Camera">
+                    {webcamOn ? "📷" : "🚫"}
+                  </button>
 
-              <div style={{ width: "1px", height: "24px", background: "rgba(255,255,255,0.2)" }}></div>
+                  <button onClick={handleToggleScreenShare} style={{
+                    width: "48px", height: "48px", borderRadius: "50%", border: "none",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    cursor: "pointer", transition: "all 0.2s ease",
+                    background: screenShareOn ? "rgba(255,255,255,0.15)" : "transparent",
+                    color: "white", fontSize: "20px"
+                  }} title="Toggle Screen Share">
+                    {screenShareOn ? "📤" : "🖥️"}
+                  </button>
+
+                  <div style={{ width: "1px", height: "24px", background: "rgba(255,255,255,0.2)" }}></div>
+                </>
+              )}
 
               <button onClick={() => leave()} className="px-4 md:px-6 h-10 md:h-12 rounded-full border-none flex items-center justify-center cursor-pointer transition-all bg-white/10 text-white font-bold text-xs md:text-sm">
                 Leave
@@ -189,7 +270,7 @@ const MeetingView = ({ onMeetingLeave, isTeacherHost }) => {
               )}
             </div>
           </div>
-          <ChatView />
+          <LiveSidebar isTeacherHost={isTeacherHost} />
         </>
       ) : joined === "JOINING" ? (
         <div className="live-placeholder" style={{ width: "100%" }}>
@@ -207,7 +288,7 @@ const MeetingView = ({ onMeetingLeave, isTeacherHost }) => {
               join();
             }}
           >
-            Join Class
+            {isTeacherHost ? "🚀 Go Live" : "Join Class"}
           </button>
         </div>
       )}
@@ -358,9 +439,9 @@ const VideoSDKClassroom = () => {
           <MeetingProvider
             config={{
               meetingId,
-              micEnabled: true,
-              webcamEnabled: true,
-              name: user?.name || "Student",
+              micEnabled: isTeacherHost,
+              webcamEnabled: isTeacherHost,
+              name: user?.name || (isTeacherHost ? "Teacher" : "Student"),
             }}
             token={token}
           >

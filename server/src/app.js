@@ -21,12 +21,12 @@ import { notFound, errorHandler } from "./middleware/error.middleware.js";
 
 const app = express();
 
-app.use(cors());
+app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
 app.use(express.json());
 app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
 
 app.get("/", (req, res) => {
-    res.send("Welcome to EduReach Backend - Server is Live!");
+    res.send("Welcome to RemoteSmart Backend - Server is Live!");
 });
 
 app.use("/api/auth", authRoutes);

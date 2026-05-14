@@ -1,6 +1,6 @@
 {
-  "name": "EduReach",
-  "short_name": "EduReach",
+  "name": "RemoteSmart",
+  "short_name": "RemoteSmart",
   "description": "A low-bandwidth learning platform for inclusive education.",
   "start_url": "/",
   "scope": "/",

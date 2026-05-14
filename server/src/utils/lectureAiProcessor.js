@@ -57,7 +57,7 @@ export const queueLectureAiProcessing = async (lectureId) => {
             $set: {
                 "aiSummary.status": "processing",
                 "aiSummary.error": "",
-                "aiQuestionBank.status": "processing",
+                "aiQuestionBank.status": "idle",
                 "aiQuestionBank.error": "",
                 "aiMcqs.status": "idle",
                 "aiMcqs.questions": [],

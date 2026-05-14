@@ -5,5 +5,5 @@ import { fileURLToPath } from "url";
 const serverDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 dotenv.config({
-    path: path.join(serverDir, ".env"),
+    path: path.join(serverDir, "..", ".env"),
 });
